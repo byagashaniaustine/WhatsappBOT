@@ -1,0 +1,54 @@
+# --------------------
+# Environment/Secrets
+# --------------------
+# Local environment variables file (MUST NOT be committed)
+.env
+# Any other local secrets file
+*.key
+*.pem
+
+# --------------------
+# Python/OS Artifacts
+# --------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+# Distribution / packaging
+.Python
+build/
+dist/
+venv/
+env/
+*.egg-info
+.installed.cfg
+# Environments
+.venv
+
+# --------------------
+# IDE and Tooling
+# --------------------
+# VSCode
+.vscode/
+
+# PyCharm
+.idea/
+
+# Jupyter/IPython
+.ipynb_checkpoints
+
+# --------------------
+# Logs and Databases
+# --------------------
+# Logs
+*.log
+# Local SQLite database (if used)
+*.db
+/db.sqlite3
+
+# --------------------
+# External Services
+# --------------------
+# Downloaded media files (if any are saved locally for testing)
+/temp_media/*
+/downloads/
