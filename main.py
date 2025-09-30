@@ -1,17 +1,21 @@
 from fastapi import FastAPI, Request
-from api.whatsappBOT import whatsapp_menu
-from api.whatsappfile import whatsapp_file
+import api.whatsappBOT as whatsappBOT
+import api.whatsappfile as whatsappfile
 
 app = FastAPI()
 
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
+    """
+    Handles incoming WhatsApp messages via Twilio webhook.
+    Routes file messages to whatsappfile module and other messages to whatsappBOT module.
+    """
     data = await request.form()
-    incoming_msg = data.get("Body", "").strip().lower()
+    num_media = int(data.get("NumMedia", 0))
 
-    # If file message → forward to whatsappFile
-    if data.get("NumMedia") and int(data.get("NumMedia")) > 0:
+    if num_media > 0:
+        # File message → forward to whatsappfile handler
         return await whatsappfile.whatsapp_file(data)
 
-    # Otherwise → normal bot menu
+    # Normal text message → forward to bot menu
     return await whatsappBOT.whatsapp_menu(data)
