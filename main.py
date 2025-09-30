@@ -6,12 +6,15 @@ app = FastAPI()
 
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
+    # Fetch form data from the incoming Twilio POST request
     data = await request.form()
+    
+    # Check if Twilio reported media content attached (NumMedia > 0)
     num_media = int(data.get("NumMedia", 0))
 
     if num_media > 0:
-        # File message → forward to whatsappfile handler
-        return await whatsappfile.whatsapp_file(data)
+        # File message → call the function directly (FIXED)
+        return await whatsapp_file(data)
 
-    # Normal text message → forward to bot menu
-    return await whatsappBOT.whatsapp_menu(data)
+    # Normal text message → call the function directly (FIXED)
+    return await whatsapp_menu(data)
