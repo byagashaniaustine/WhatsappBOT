@@ -50,6 +50,7 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         affordability_data = None
         
         if isinstance(response_data, dict):
+            logger.warning(response_data)
             affordability_data = response_data.get('affordability_scores')
             
             if affordability_data is None:
@@ -76,14 +77,7 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             medium_risk = affordability_data.get('moderate', 0.0)
             low_risk = affordability_data.get('low', 0.0)
         
-            if not any([high_risk, medium_risk, low_risk]):
-                logger.warning("Manka returned a dict with all zero/missing scores.")
-                return (
-                    f"*❌ Loan Qualification Status: NOT QUALIFIED*\n"
-                    f"*---------------------------------------------*\n\n"
-                    f"Based on your analyzed transaction history, a credit offer could not be generated at this time.\n\n"
-                    f"This is typically due to low, irregular, or high-risk activity in the provided statement."
-                )
+    
 
             max_credit = max(high_risk, medium_risk, low_risk)
             
