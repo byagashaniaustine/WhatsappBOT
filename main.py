@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
-import api.whatsappBOT as whatsappBOT
-import api.whatsappfile as whatsappfile
+from api.whatsappBOT import whatsapp_menu
+from api.whatsappfile import whatsapp_file
 
 app = FastAPI()
 

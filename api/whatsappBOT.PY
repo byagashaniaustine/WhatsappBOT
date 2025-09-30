@@ -6,12 +6,6 @@ import logging
 logger = logging.getLogger("myapp")
 
 async def whatsapp_menu(data: dict):
-    """
-    Handle incoming WhatsApp text messages and return credit/loan tips menu.
-    
-    :param data: Dictionary from Twilio webhook with keys like 'From' and 'Body'
-    :return: FastAPI PlainTextResponse
-    """
     try:
         from_number = data.get("From", "")
         incoming_msg = data.get("Body", "").strip().lower()
