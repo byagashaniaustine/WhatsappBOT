@@ -74,7 +74,7 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             
         elif isinstance(affordability_data, dict):
             high_risk = affordability_data.get('high_risk', 0.0)
-            medium_risk = affordability_data.get('moderate_risk', 0.0)
+            medium_risk = affordability_data.get('medium_risk', 0.0)
             low_risk = affordability_data.get('low_risk', 0.0)
         
     
