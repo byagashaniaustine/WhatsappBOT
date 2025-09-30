@@ -6,10 +6,6 @@ app = FastAPI()
 
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
-    """
-    Handles incoming WhatsApp messages via Twilio webhook.
-    Routes file messages to whatsappfile module and other messages to whatsappBOT module.
-    """
     data = await request.form()
     num_media = int(data.get("NumMedia", 0))
 
