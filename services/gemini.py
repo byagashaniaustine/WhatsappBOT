@@ -3,7 +3,6 @@ import requests
 import logging
 from google import genai
 from google.genai.errors import APIError
-# We need to explicitly import Part to handle binary file uploads
 from google.genai.types import Part
 
 logger = logging.getLogger(__name__)
