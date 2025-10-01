@@ -26,7 +26,7 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         }
 
         response = requests.post(
-            MANKA_ENDPOINT, 
+           str(MANKA_ENDPOINT), 
             headers=headers, 
             data=data,           
             files=files,         
