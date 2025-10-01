@@ -59,9 +59,6 @@ async def whatsapp_file(data):
         # Check credentials for media download
         if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
              raise EnvironmentError("Twilio credentials (SID/Token) missing for media download.")
-
-        # STEP 1: Upload and store file in Supabase
-        # NOTE: store_file MUST use TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN for download.
         supabase_url = store_file(twilio_file_url, from_number, content_type)
         
         # STEP 2: Route analysis

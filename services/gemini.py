@@ -38,7 +38,7 @@ def analyze_image(image_url: str) -> str:
         image_bytes = image_response.content
         image_part = Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
-        prompt = "Describe this image in detail."
+        prompt = "Describe this image in detail maximum 400 characters."
         contents = [
             prompt,
             image_part, 
