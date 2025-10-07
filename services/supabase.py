@@ -17,46 +17,60 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"]
 PDF_TYPE = "application/pdf"
 
-def store_file(file_url: str, user_id: str, content_type: str) -> str:
+
+def store_file(user_id: str, user_name: str, user_phone: str, flow_type: str , file_url: str , file_type: str ) -> str | None:
     """
-    Downloads file from Twilio and uploads to Supabase Storage.
-    Returns public URL.
+    Stores metadata in Supabase about a file uploaded via Twilio Flow.
+
+    Parameters:
+    - user_id: unique user identifier
+    - user_name: full name of the user
+    - user_phone: user's phone number
+    - flow_type: type of Twilio Flow (optional)
+    - file_url: public URL of uploaded file (optional)
+    - file_type: media type (image/pdf) (optional)
+
+    Returns:
+    - Public URL of the uploaded file if provided, else None
     """
-    # Validate type
-    if content_type not in IMAGE_TYPES + [PDF_TYPE]:
-        raise ValueError("Unsupported file type. Only images and PDFs allowed.")
+    public_url = None
 
-    # Download file from Twilio
-    response = requests.get(file_url, auth=(str(TWILIO_ACCOUNT_SID), str(TWILIO_AUTH_TOKEN)))
-    if response.status_code != 200:
-        raise Exception(f"Failed to download file from Twilio: {response.status_code}")
-    file_data = response.content
+    # Handle file upload if file_url is provided
+    if file_url:
+        if file_type not in IMAGE_TYPES + [PDF_TYPE]:
+            raise ValueError("Unsupported file type. Only images and PDFs allowed.")
 
-    # Determine file extension
-    if content_type in IMAGE_TYPES:
-        ext = content_type.split("/")[-1]  # jpg/jpeg/png
-    elif content_type == PDF_TYPE:
-        ext = "pdf"
+        # Download file from Twilio
+        response = requests.get(file_url, auth=(str(TWILIO_ACCOUNT_SID), str(TWILIO_AUTH_TOKEN)))
+        if response.status_code != 200:
+            raise Exception(f"Failed to download file from Twilio: {response.status_code}")
+        file_data = response.content
 
-    # Generate unique filename
-    original_name = os.path.basename(file_url).split("?")[0]
-    name = os.path.splitext(original_name)[0]
-    unique_id = uuid.uuid4().hex[:8]
-    filename = f"{user_id}/{name}_{unique_id}.{ext}"
+        # Determine file extension
+        if file_type in IMAGE_TYPES:
+            ext = file_type.split("/")[-1]
+        elif file_type == PDF_TYPE:
+            ext = "pdf"
+        else:
+            ext = "dat"
 
-    # Upload to Supabase
-    upload_res = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
-    if not hasattr(upload_res, "path") or not upload_res.path:
-        raise Exception(f"Supabase upload failed: {upload_res}")
+        # Generate unique filename
+        filename = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
 
-    public_url = supabase.storage.from_("whatsapp_files").get_public_url(filename)
+        # Upload to Supabase Storage
+        upload_res = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
+        if not hasattr(upload_res, "path") or not upload_res.path:
+            raise Exception(f"Supabase upload failed: {upload_res}")
 
-    # Insert metadata in DB
+        public_url = supabase.storage.from_("whatsapp_files").get_public_url(filename)
+
+    # Insert metadata in Supabase DB
     insert_res = supabase.table("WHatsappUsers").insert({
         "user_id": user_id,
-        "file_name": filename,
-        "file_url": public_url,
-        "file_type": ext,
+        "user_name": user_name,
+        "user_phone": user_phone,
+        "flow_type": flow_type,
+        "file_url": public_url
     }).execute()
 
     if not insert_res or not getattr(insert_res, "data", None):
