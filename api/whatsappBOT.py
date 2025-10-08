@@ -82,7 +82,7 @@ async def whatsapp_menu(data: dict):
                 else:
                     parameters = {}
 
-                trigger_twilio_flow(user_number=from_number, action=flow_action, parameters=parameters)
+                trigger_twilio_flow(user_phone=from_number, flow_type=flow_action, user_name=str(data.get("user_name")), user_id=str(data.get("user_id")))
                 logger.info(f"Triggered Twilio Flow '{flow_action}' for {from_number}")
                 return PlainTextResponse("OK")
 

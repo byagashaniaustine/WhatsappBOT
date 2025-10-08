@@ -1,45 +1,60 @@
 import os
+import json
 from twilio.rest import Client
 
+# Twilio credentials
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")  # WhatsApp number
+TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
+
+# 🔒 Hardcoded Flow SIDs (replace with your real Twilio Flow Template SIDs)
+FLOW_TEMPLATES = {
+    "open_flow_upload_documents": "HX705e35a409323bab371b5d371771ae33",  # upload documents flow SID
+    "open_flow_loan_calculator": "HXyyyyyyyyyyyyyyyyyyyyyyyyyyyy",  # loan calculator flow SID
+}
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 
 def send_message(to: str, body: str):
     """
-    Send plain text WhatsApp message
+    Send a normal WhatsApp text message.
     """
     client.messages.create(
-        from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-        to=f"whatsapp:{to}",
-        body=body
+        from_=TWILIO_PHONE_NUMBER,
+        body=body,
+        to=to
     )
 
 
-def trigger_twilio_flow(user_number: str, action: str, parameters: dict):
+def trigger_twilio_flow(user_phone: str, flow_type: str, user_name: str , user_id: str):
     """
-    Trigger a Twilio Studio Flow with dynamic user values but fixed key names.
+    Trigger a WhatsApp Flow Template using Content SID.
+    Parameters use fixed key names for all users, but are filled dynamically from backend.
     """
-    # Map menu action → Flow SID
-    flow_map = {
-        "open_flow_upload_documents": "HX705e35a409323bab371b5d371771ae33",  # replace with your Flow SID
-        "open_flow_loan_calculator": "FWYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"  # replace with your Flow SID
-    }
-
-    flow_sid = flow_map.get(action)
-    if not flow_sid:
-        return {"status": "error", "message": f"No Flow configured for action '{action}'"}
-
     try:
-        execution = client.studio.v2.flows(flow_sid).executions.create(
-            to=f"whatsapp:{user_number}",
+        # Get flow SID based on flow_type
+        flow_sid = FLOW_TEMPLATES.get(flow_type)
+        if not flow_sid:
+            raise ValueError(f"No Flow Template found for type '{flow_type}'")
+
+        # Fixed parameter key names (values filled dynamically)
+        content_vars = {
+            "user_id": user_id or "",
+            "user_name": user_name or "",
+            "user_phone": user_phone,
+            "flow_type": flow_type
+        }
+
+        # Send interactive flow message
+        client.messages.create(
             from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
-            parameters=parameters
+            to=f"whatsapp:{user_phone}",
+            content_sid=flow_sid,
+            content_variables=json.dumps(content_vars)
         )
-        return {"status": "success", "message": f"Flow '{action}' triggered for {user_number}", "execution_sid": execution.sid}
+
+        return {"status": "success", "message": f"Triggered WhatsApp Flow '{flow_type}' for {user_phone}"}
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
