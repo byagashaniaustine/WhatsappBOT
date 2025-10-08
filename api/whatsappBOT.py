@@ -7,21 +7,19 @@ logger = logging.getLogger("myapp")
 
 async def whatsapp_menu(data: dict):
     try:
-        # Ensure From and Body are strings
-        from_number = str(data.get("From", ""))
-        incoming_msg = str(data.get("Body", "")).strip().lower()
+        from_number = str(data.get("From"))
+        incoming_msg = str(data.get("Body")).strip().lower()
 
         logger.info(f"📩 Incoming WhatsApp message from {from_number}: {incoming_msg}")
 
-        # Menu options dictionary
         menu = {
             "1": {
                 "title": "Historia ya Mikopo (Credit Scoring)",
-                "description": "Jua alama yako ya mikopo na historia yako ya malipo kutoka CRB. Hii hukusaidia kuelewa nafasi yako ya kupata mikopo mipya."
+                "description": "Jua alama yako ya mikopo na historia yako ya malipo kutoka CRB."
             },
             "2": {
                 "title": "Uwezo wa Mikopo (Credit Bandwidth)",
-                "description": "Pata tathmini ya uwezo wako wa kifedha. Hapa utaona kiwango cha juu cha mkopo unaoweza kupata kulingana na historia yako ya mikopo na mapato yako."
+                "description": "Pata tathmini ya uwezo wako wa kifedha kulingana na historia ya mikopo na mapato."
             },
             "3": {
                 "title": "Wasilisha Nyaraka kwa Uhakiki",
@@ -33,11 +31,11 @@ async def whatsapp_menu(data: dict):
             },
             "5": {
                 "title": "Aina za Mikopo",
-                "description": "Pata maelezo kuhusu mikopo mbalimbali kama Mkopo wa Biashara, Mkopo wa Kijamii, Mkopo wa Haraka, na Mkopo wa Mali."
+                "description": "Pata maelezo kuhusu mikopo mbalimbali kama Mkopo wa Biashara, Kijamii, Haraka, na Mali."
             },
             "6": {
                 "title": "Huduma za Nilipo",
-                "description": "Huduma zinazotolewa kwa sasa: upimaji wa mikopo, ushauri wa kifedha, na huduma za marejeleo ya CRB. Tafuta huduma inayokufaa zaidi."
+                "description": "Huduma zinazotolewa sasa: upimaji wa mikopo, ushauri wa kifedha, huduma za marejeleo ya CRB."
             }
         }
 
@@ -54,49 +52,46 @@ async def whatsapp_menu(data: dict):
                 "6️⃣ Huduma za Mikopo"
             )
             send_message(to=from_number, body=reply_text)
-            logger.info(f"Sent menu response to {from_number}")
             return PlainTextResponse("OK")
 
-        # Handle menu options
+        # Handle menu selection
         elif incoming_msg in menu:
             item = menu[incoming_msg]
 
-            # Options 3 & 4 → trigger Twilio Flow only
+            # Options with flow
             if "action" in item:
                 flow_action = item["action"]
 
-                # Build dynamic parameters from user input / webhook
+                # Build dynamic parameters
                 if flow_action == "open_flow_upload_documents":
-                    parameters = {
-                        "user_id": data.get("user_id"),
-                        "user_name": data.get("user_name"),
-                        "user_phone": from_number,
-                        "flow_type": "upload_documents"
-                    }
+                    user_id = str(data.get("user_id", ""))
+                    user_name = str(data.get("user_name", ""))
+                    trigger_twilio_flow(
+                        user_phone=from_number,
+                        flow_type=flow_action,
+                        user_name=user_name,
+                        user_id=user_id
+                    )
                 elif flow_action == "open_flow_loan_calculator":
-                    parameters = {
-                        "payment": data.get("payment"),
-                        "duration": data.get("duration"),
-                        "interest_rate": data.get("interest_rate")
-                    }
-                else:
-                    parameters = {}
+                    # Collect loan inputs from user_text or data keys
+                    trigger_twilio_flow(
+                        user_phone=from_number,
+                        flow_type=flow_action,
+                        user_name=str(data.get("user_name", "")),
+                        user_id=str(data.get("user_id", ""))
+                    )
 
-                trigger_twilio_flow(user_phone=from_number, flow_type=flow_action, user_name=str(data.get("user_name")), user_id=str(data.get("user_id")))
-                logger.info(f"Triggered Twilio Flow '{flow_action}' for {from_number}")
+                logger.info(f"Triggered Flow '{flow_action}' for {from_number}")
                 return PlainTextResponse("OK")
 
             # Other options → send title + description
             reply_text = f"{item.get('title')}\n{item.get('description')}"
             send_message(to=from_number, body=reply_text)
-            logger.info(f"Sent menu response to {from_number}")
             return PlainTextResponse("OK")
 
-        # Default fallback
-        else:
-            reply_text = "Jibu na neno 'menu' ili kuona huduma zetu"
-            send_message(to=from_number, body=reply_text)
-            return PlainTextResponse("OK")
+        # Fallback
+        send_message(to=from_number, body="Jibu na neno 'menu' ili kuona huduma zetu")
+        return PlainTextResponse("OK")
 
     except Exception as e:
         logger.exception("Error in whatsapp_menu:")
@@ -104,36 +99,29 @@ async def whatsapp_menu(data: dict):
 
 
 def process_flow_input(user_text: str, flow_type: str) -> str:
-    """
-    Handles structured Twilio Flow inputs, including reverse loan calculator.
-    """
     try:
         user_text_str = str(user_text)
 
         if flow_type == "loan_calculator":
-            # Expect user_text like: "payment=50000&duration=12&interest_rate=2"
+            # Example input: "payment=50000&duration=12&interest_rate=2"
             try:
                 params = dict(pair.split("=") for pair in user_text_str.split("&"))
                 payment = float(params.get("payment", 0))
                 duration = int(params.get("duration", 0))
                 interest_rate = float(params.get("interest_rate", 0)) / 100
             except Exception:
-                return "⚠️ Tafadhali tuma data kwa format sahihi: payment=VALUE&duration=VALUE&interest_rate=VALUE"
+                return "⚠️ Tuma data kwa format sahihi: payment=VALUE&duration=VALUE&interest_rate=VALUE"
 
             if payment <= 0 or duration <= 0 or interest_rate < 0:
-                return "⚠️ Tafadhali weka thamani sahihi kwa malipo, muda na riba."
+                return "⚠️ Thamani zisizo sahihi kwa malipo, muda, au riba."
 
-            if interest_rate == 0:
-                loan_amount = payment * duration
-            else:
-                loan_amount = payment * (1 - (1 + interest_rate) ** (-duration)) / interest_rate
-
+            loan_amount = payment * duration if interest_rate == 0 else payment * (1 - (1 + interest_rate) ** (-duration)) / interest_rate
             loan_amount = round(loan_amount, 2)
 
             return (
-                f"📊 Matokeo ya kikokotoo chako cha mkopo:\n"
-                f"Malipo unayoweza kufanya kila mwezi: {payment}\n"
-                f"Muda wa malipo (miezi): {duration}\n"
+                f"📊 Matokeo ya kikokotoo chako:\n"
+                f"Malipo kila mwezi: {payment}\n"
+                f"Muda (miezi): {duration}\n"
                 f"Kiwango cha riba: {interest_rate*100}%\n"
                 f"Kiasi cha mkopo unachoweza kumudu: {loan_amount}"
             )
