@@ -1,77 +1,99 @@
+import logging
+import mimetypes
 import requests
-from fastapi.responses import PlainTextResponse
+
+from services.supabase import store_file
 from services.gemini import analyze_image
 from services.pdfendpoint import analyze_pdf
 from services.twilio import send_message
-import os
 
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+logger = logging.getLogger(__name__)
 
-IMAGE_TYPES = {"image/jpeg", "image/png"}
-PDF_TYPE = "application/pdf"
+def process_file_upload(
+    user_id: str,
+    user_name: str,
+    user_phone: str,
+    flow_type: str,
+    file_url: str,
+    file_type: str
+):
+    """
+    Handles WhatsApp file uploads (images or PDFs) submitted through Flow Forms.
 
-
-def extract_filename_and_extension(url: str, content_type: str) -> tuple[str, str]:
-    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}
-    ext = ext_map.get(content_type)
-    if not ext:
-        raise ValueError(f"Unsupported media type: {content_type}")
-
-    clean_url = url.split("?")[0]
-    filename_with_ext = clean_url.split("/")[-1]
-
-    if "." not in filename_with_ext or filename_with_ext.endswith("."):
-        filename = f"file{ext}"
-        return filename, ext.strip(".")
-    return filename_with_ext, ext.strip(".")
-
-
-async def whatsapp_file(data: dict):
-    from_number = str(data.get("From"))
-    twilio_file_url = data.get("MediaUrl0")
-    content_type = data.get("MediaContentType0", "")
-    user_fullname = data.get("user_name") or from_number.split(":")[-1]
-
-    if not twilio_file_url:
-        send_message(to=from_number, body="⚠️ Hakuna faili lilipokelewa. Tafadhali jaribu tena.")
-        return PlainTextResponse("No file")
-
-    if content_type not in IMAGE_TYPES.union({PDF_TYPE}):
-        send_message(
-            to=from_number,
-            body="⚠️ Faili hili halijaungwa mkono. Tuma PDF au picha (JPG/PNG)."
-        )
-        return PlainTextResponse("Unsupported file type")
+    - Stores file in Supabase
+    - Analyzes via Gemini or MANKA API
+    - Sends result back via WhatsApp
+    """
 
     try:
-        # Process images
-        if content_type in IMAGE_TYPES:
-            analysis_result = analyze_image(twilio_file_url)
+        # --- Detect file type ---
+        mime_type = file_type or mimetypes.guess_type(file_url)[0] or ""
+        is_pdf = "pdf" in mime_type.lower()
+        is_image = any(ext in mime_type.lower() for ext in ["image", "jpeg", "png", "jpg", "webp"])
 
-        # Process PDF
+        logger.info(f"Processing file from {user_phone}: {mime_type}")
+
+        # --- Store file in Supabase ---
+        stored_path = store_file(file_url, user_id)
+        logger.info(f"File stored at: {stored_path}")
+
+        # --- Download file content ---
+        response = requests.get(file_url)
+        response.raise_for_status()
+        file_data = response.content
+
+        # --- Prepare filename ---
+        filename = file_url.split("/")[-1] or "uploaded_file"
+
+        # --- Analyze file content ---
+        if is_image:
+            logger.info("Analyzing image via Gemini...")
+            analysis_result = analyze_image(file_url)
+
+            if isinstance(analysis_result, dict):
+                summary = analysis_result.get("summary", "No summary generated.")
+            else:
+                summary = str(analysis_result)
+
+            response_text = (
+                f"📸 *Image analyzed successfully!*\n\n"
+                f"**Summary:** {summary}"
+            )
+
+        elif is_pdf:
+            logger.info("Analyzing PDF via MANKA API...")
+            analysis_result = analyze_pdf(file_data, filename, user_name)
+
+            if isinstance(analysis_result, dict):
+                summary = analysis_result.get("summary", "No summary generated.")
+            else:
+                summary = str(analysis_result)
+
+            response_text = (
+                f"📄 *PDF analyzed successfully!*\n\n"
+                f"{summary}"
+            )
+
         else:
-            file_response = requests.get(
-                twilio_file_url,
-                stream=True,
-                auth=(str(TWILIO_ACCOUNT_SID),str(TWILIO_AUTH_TOKEN))
+            logger.warning(f"Unsupported file type: {mime_type}")
+            response_text = (
+                f"⚠️ Unsupported file type: {mime_type}.\n"
+                f"Please upload an image or PDF document."
             )
-            file_response.raise_for_status()
-            file_data = file_response.content
-            filename, _ = extract_filename_and_extension(twilio_file_url, content_type)
-            analysis_result = analyze_pdf(
-                file_data=file_data,
-                filename=filename,
-                user_fullname=user_fullname
-            )
+
+        # --- Send WhatsApp confirmation ---
+        send_message(user_phone, response_text)
+
+        return {
+            "status": "success",
+            "file_type": mime_type,
+            "stored_path": stored_path,
+            "response_text": response_text
+        }
 
     except Exception as e:
-        analysis_result = f"⚠️ Tatizo lililotokea: {str(e)}"
+        logger.exception(f"Error processing file upload for {user_phone}: {str(e)}")
+        error_text = f"❌ Error analyzing your file: {str(e)}"
+        send_message(user_phone, error_text)
 
-    # Truncate for Twilio message limit
-    MAX_CHARS = 1500
-    if len(analysis_result) > MAX_CHARS:
-        analysis_result = analysis_result[:MAX_CHARS] + "\n\n[... Message truncated ...]"
-
-    send_message(to=from_number, body=analysis_result)
-    return PlainTextResponse("OK")
+        return {"status": "error", "message": str(e)}

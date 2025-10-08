@@ -1,42 +1,27 @@
-from fastapi.responses import PlainTextResponse
-from services.twilio import send_message, trigger_twilio_flow
+# whatsappBOT.py
 import logging
+from services.twilio import send_message, trigger_twilio_flow
+from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger("myapp")
 
 
 async def whatsapp_menu(data: dict):
     try:
-        from_number = str(data.get("From"))
-        incoming_msg = str(data.get("Body")).strip().lower()
+        from_number = str(data.get("From") or "")
+        if not from_number:
+            logger.warning("No 'From' number provided")
+            return PlainTextResponse("OK")
 
-        logger.info(f"📩 Incoming WhatsApp message from {from_number}: {incoming_msg}")
+        incoming_msg = str(data.get("Body") or "").strip().lower()
 
         menu = {
-            "1": {
-                "title": "Historia ya Mikopo (Credit Scoring)",
-                "description": "Jua alama yako ya mikopo na historia yako ya malipo kutoka CRB."
-            },
-            "2": {
-                "title": "Uwezo wa Mikopo (Credit Bandwidth)",
-                "description": "Pata tathmini ya uwezo wako wa kifedha kulingana na historia ya mikopo na mapato."
-            },
-            "3": {
-                "title": "Wasilisha Nyaraka kwa Uhakiki",
-                "action": "open_flow_upload_documents"
-            },
-            "4": {
-                "title": "Kikokotoo cha Mkopo (Loan Calculator)",
-                "action": "open_flow_loan_calculator"
-            },
-            "5": {
-                "title": "Aina za Mikopo",
-                "description": "Pata maelezo kuhusu mikopo mbalimbali kama Mkopo wa Biashara, Kijamii, Haraka, na Mali."
-            },
-            "6": {
-                "title": "Huduma za Nilipo",
-                "description": "Huduma zinazotolewa sasa: upimaji wa mikopo, ushauri wa kifedha, huduma za marejeleo ya CRB."
-            }
+            "1": {"title": "Historia ya Mikopo (Credit Scoring)", "description": "Jua alama yako ya mikopo na historia yako ya malipo kutoka CRB."},
+            "2": {"title": "Uwezo wa Mikopo (Credit Bandwidth)", "description": "Pata tathmini ya uwezo wako wa kifedha kulingana na historia ya mikopo na mapato."},
+            "3": {"title": "Wasilisha Nyaraka kwa Uhakiki", "action": "open_flow_upload_documents"},
+            "4": {"title": "Kikokotoo cha Mkopo (Loan Calculator)", "action": "open_flow_loan_calculator"},
+            "5": {"title": "Aina za Mikopo", "description": "Pata maelezo kuhusu mikopo mbalimbali kama Mkopo wa Biashara, Kijamii, Haraka, na Mali."},
+            "6": {"title": "Huduma za Nilipo", "description": "Huduma zinazotolewa sasa: upimaji wa mikopo, ushauri wa kifedha, huduma za marejeleo ya CRB."}
         }
 
         # Show main menu
@@ -61,26 +46,15 @@ async def whatsapp_menu(data: dict):
             # Options with flow
             if "action" in item:
                 flow_action = item["action"]
+                user_id = str(data.get("user_id") or "")
+                user_name = str(data.get("user_name") or "")
 
-                # Build dynamic parameters
-                if flow_action == "open_flow_upload_documents":
-                    user_id = str(data.get("user_id", ""))
-                    user_name = str(data.get("user_name", ""))
-                    trigger_twilio_flow(
-                        user_phone=from_number,
-                        flow_type=flow_action,
-                        user_name=user_name,
-                        user_id=user_id
-                    )
-                elif flow_action == "open_flow_loan_calculator":
-                    # Collect loan inputs from user_text or data keys
-                    trigger_twilio_flow(
-                        user_phone=from_number,
-                        flow_type=flow_action,
-                        user_name=str(data.get("user_name", "")),
-                        user_id=str(data.get("user_id", ""))
-                    )
-
+                trigger_twilio_flow(
+                    user_phone=from_number,
+                    flow_type=flow_action,
+                    user_name=user_name,
+                    user_id=user_id
+                )
                 logger.info(f"Triggered Flow '{flow_action}' for {from_number}")
                 return PlainTextResponse("OK")
 
@@ -94,7 +68,7 @@ async def whatsapp_menu(data: dict):
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception("Error in whatsapp_menu:")
+        logger.exception(f"Error in whatsapp_menu: {str(e)}")
         return PlainTextResponse("Internal Server Error", status_code=500)
 
 
@@ -103,7 +77,6 @@ def process_flow_input(user_text: str, flow_type: str) -> str:
         user_text_str = str(user_text)
 
         if flow_type == "loan_calculator":
-            # Example input: "payment=50000&duration=12&interest_rate=2"
             try:
                 params = dict(pair.split("=") for pair in user_text_str.split("&"))
                 payment = float(params.get("payment", 0))
