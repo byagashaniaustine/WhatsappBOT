@@ -18,7 +18,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Allowed File Types ---
-IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"]
+IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
 PDF_TYPE = "application/pdf"
 
 
@@ -34,49 +34,47 @@ def store_file(
     Downloads a WhatsApp file from Twilio, uploads it to Supabase Storage,
     and logs metadata in the 'WhatsappUsers' table.
 
-    Returns: public file URL (or None if upload fails).
+    Returns:
+        str | None: public file URL if successful, else None.
     """
-
-    public_url = None
-
     try:
-        # --- Step 1: Validate file URL & type ---
+        # --- Validate inputs ---
         if not file_url:
             raise ValueError("Missing file URL.")
         if file_type not in IMAGE_TYPES + [PDF_TYPE]:
             raise ValueError(f"Unsupported file type: {file_type}")
 
-        # --- Step 2: Download file from Twilio ---
-        response = requests.get(file_url, auth=(str(TWILIO_ACCOUNT_SID),str(TWILIO_AUTH_TOKEN)))
-        if response.status_code != 200:
-            raise Exception(f"Failed to download file from Twilio: HTTP {response.status_code}")
+        # --- Download file from Twilio ---
+        response = requests.get(file_url, auth=(str(TWILIO_ACCOUNT_SID),str(TWILIO_AUTH_TOKEN)), timeout=30)
+        response.raise_for_status()
         file_data = response.content
 
-        # --- Step 3: Generate filename ---
+        # --- Generate a unique filename ---
         ext = file_type.split("/")[-1] if "/" in file_type else "dat"
         filename = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
 
-        # --- Step 4: Upload to Supabase Storage bucket ---
-        upload_response = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
+        # --- Upload to Supabase Storage bucket ---
+        upload_result = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
 
-        # Supabase SDK returns None if successful, raises on error
-        if upload_response is not None:
-            logger.info(f"✅ File uploaded to Supabase: {filename}")
+        # Supabase SDK returns None on success
+        if upload_result is not None:
+            logger.warning(f"⚠️ Unexpected upload response: {upload_result}")
 
-        # --- Step 5: Get public URL ---
+        # --- Get public URL ---
         public_url = supabase.storage.from_("whatsapp_files").get_public_url(filename)
         logger.info(f"🌍 Public file URL: {public_url}")
 
-        # --- Step 6: Save metadata to table ---
-        insert_data = {
+        # --- Insert metadata into table ---
+        metadata = {
             "user_id": user_id,
             "user_name": user_name,
             "user_phone": user_phone,
             "flow_type": flow_type,
             "file_url": public_url,
+            "file_type": file_type
         }
 
-        result = supabase.table("WhatsappUsers").insert(insert_data).execute()
+        result = supabase.table("WHatsappUsers").insert(metadata).execute()
         if not getattr(result, "data", None):
             logger.warning(f"⚠️ Failed to insert metadata into Supabase: {result}")
 

@@ -1,6 +1,6 @@
 import logging
 import mimetypes
-from fastapi import FastAPI, Request, UploadFile
+from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 
 from api.whatsappBOT import whatsapp_menu
@@ -22,45 +22,34 @@ async def whatsapp_webhook(request: Request):
         form_data = await request.form()
         data = dict(form_data)
 
-        # --- Extract basic info ---
-        from_number: str = str(data.get("From") or "")
+        from_number = str(data.get("From") or "")
         if not from_number:
             logger.warning("Missing 'From' number in request")
             return PlainTextResponse("OK")
 
-        user_id = str(data.get("user_id"))
-        user_name = str(data.get("user_name"))
-        flow_type = str(data.get("flow_type"))
+        user_id = str(data.get("user_id") or "")
+        user_name = str(data.get("user_name") or "")
+        flow_type = str(data.get("flow_type") or "")
 
-        # --- Handle file upload if present ---
-        uploaded_file = str(data.get("Media"))  # can be UploadFile or string URL
-        file_url: str | None = None
-        file_type: str | None = None
+        # --- Check for media upload ---
+        num_media = str(data.get("NumMedia", 0))
+        if int(num_media) > 0:
+            file_url = str(data.get("MediaUrl0") or "")
+            file_type = str(data.get("MediaContentType0") or "")
 
-        if uploaded_file:
-            if isinstance(uploaded_file, UploadFile):
-                file_url = uploaded_file.filename
-                file_type = uploaded_file.content_type
-            elif isinstance(uploaded_file, str):
-                file_url = uploaded_file
-                file_type = None  # unknown MIME type
-            else:
-                logger.warning(f"Unsupported Media type: {type(uploaded_file)}")
+            if file_url:
+                result = process_file_upload(
+                    user_id=user_id,
+                    user_name=user_name,
+                    user_phone=from_number,
+                    flow_type=flow_type or "upload_documents",
+                    file_url=file_url,
+                    file_type=file_type,
+                )
+                logger.info(f"File upload processed: {result}")
+                return PlainTextResponse("OK")
 
-        if file_url:
-            # Process the uploaded file
-            result = process_file_upload(
-                user_id=user_id,
-                user_name=user_name,
-                user_phone=from_number,
-                flow_type=flow_type,
-                file_url=file_url,
-                file_type=file_type or "",
-            )
-            logger.info(f"File upload processed: {result}")
-            return PlainTextResponse("OK")
-
-        # --- If no file, treat as normal text message ---
+        # --- Otherwise treat as text message ---
         await whatsapp_menu(data)
         return PlainTextResponse("OK")
 
