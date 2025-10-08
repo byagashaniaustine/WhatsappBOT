@@ -21,9 +21,9 @@ def send_message(to: str, body: str):
     Send a normal WhatsApp text message.
     """
     client.messages.create(
-        from_=f"whatsapp:{TWILIO_PHONE_NUMBER}",
+        from_=TWILIO_PHONE_NUMBER,
         body=body,
-        to=f"{to}"   # ✅ No whatsapp: prefix here
+        to=f"whatsapp:{to}"   # ✅ No whatsapp: prefix here
     )
 
 
@@ -49,7 +49,7 @@ def trigger_twilio_flow(user_phone: str, flow_type: str, user_name: str, user_id
         # Send interactive flow message
         client.messages.create(
             from_=TWILIO_PHONE_NUMBER,
-            to=f"{user_phone}",   # ✅ No whatsapp: prefix
+            to=f"whatsapp:{user_phone}",   # ✅ No whatsapp: prefix
             content_sid=flow_sid,
             content_variables=json.dumps(content_vars)
         )
