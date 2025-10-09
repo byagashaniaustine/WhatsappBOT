@@ -103,7 +103,7 @@ def _send_content_template(
 
         message = client.messages.create(
             from_=TWILIO_PHONE_NUMBER,
-            to=f"whatsapp:{user_phone}",
+            to=user_phone,
             content_sid=content_sid,
             content_variables=content_vars_json
         )
