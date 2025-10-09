@@ -29,9 +29,10 @@ def send_message(to: str, body: str) -> None:
     try:
         message = client.messages.create(
             from_=TWILIO_PHONE_NUMBER,
-            to=f"whatsapp:{to}",
+            to=to,
             body=body
         )
+
         logger.info(f"✅ WhatsApp message sent to {to}. SID: {message.sid}")
 
     except TwilioRestException as e:
