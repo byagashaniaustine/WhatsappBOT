@@ -3,6 +3,7 @@
 import logging
 from services.twilio import send_message, trigger_twilio_flow, send_list_message_template 
 from fastapi.responses import PlainTextResponse
+from datetime import datetime, timezone
 
 logger = logging.getLogger("myapp")
 
@@ -56,17 +57,24 @@ async def whatsapp_menu(data: dict):
             if "action" in item:
                 action_type = item["action"]
                 
-                # --- NEW LOGIC FOR OPTION 3: SEND LIST MESSAGE TEMPLATE ---
+                # --- LOGIC FOR OPTION 3: SEND LIST MESSAGE TEMPLATE ---
                 if action_type == "send_nakopesheka_list":
                     
-                    list_variables = {"1": user_name or "mteja"}
+                    # Create dynamic date/time for the template variables
+                    now_utc = datetime.now(timezone.utc)
+                    
+                    # The template requires {{date}} and {{time}}
+                    list_variables = {
+                        "date": now_utc.strftime("%d %b, %Y"), # e.g., 09 Oct, 2025
+                        "time": now_utc.strftime("%I:%M %p UTC")  # e.g., 01:51 PM UTC
+                    }
                     
                     send_list_message_template(
                         user_phone=from_number,
                         template_key="nakopesheka_list_menu",
                         variables=list_variables
                     )
-                    logger.info(f"Sent Nakopesheka List Menu for option 3 to {from_number}")
+                    logger.info(f"Sent Quick Reply Template for option 3 to {from_number}")
                     return PlainTextResponse("OK")
                 
                 # --- Existing Logic for Flow Actions (e.g., Option 4) ---
@@ -85,9 +93,7 @@ async def whatsapp_menu(data: dict):
             send_message(to=from_number_full, body=reply_text)
             return PlainTextResponse("OK")
 
-        # --- Submenu/Fallback cleanup ---
-        # ALL SUBMENU LOGIC IS REMOVED HERE. 
-        # Any unexpected text will fall through to the final fallback.
+        # --- Fallback ---
         send_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu' ili kuona huduma zetu.")
         return PlainTextResponse("OK")
 

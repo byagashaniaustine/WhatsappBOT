@@ -5,7 +5,7 @@ import json
 import logging
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-from typing import Optional, Dict, Any, Union # Import necessary types for clarity
+from typing import Optional, Dict, Any # Import necessary types
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,12 @@ if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER):
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-# Hardcoded Template SIDs (Flows and Content Templates like List Messages)
+# Hardcoded Template SIDs (Flows and Content Templates)
 FLOW_TEMPLATES = {
     "open_flow_upload_documents": "HX705e35a409323bab371b5d371771ae33",
     "open_flow_loan_calculator": "HXyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
-    # Placeholder SID for the new Nakopesheka List Message Template
-    "nakopesheka_list_menu": "HXkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk" 
+    # **NOTE**: Ensure this SID is correct for your approved Quick Reply template!
+    "nakopesheka_list_menu": "HX332ef91b92981458dd394eb18f97e0f5" 
 }
 
 def send_message(to: str, body: str) -> None:
@@ -32,7 +32,6 @@ def send_message(to: str, body: str) -> None:
     Safely send a basic WhatsApp message via Twilio.
     """
     try:
-        # Note: 'to' must contain the 'whatsapp:' prefix for the Twilio API
         target_to = to if to.startswith("whatsapp:") else f"whatsapp:{to}"
         
         message = client.messages.create(
@@ -58,15 +57,14 @@ def trigger_twilio_flow(user_phone: str, flow_type: str, user_name: str, user_id
     """
     Trigger a Twilio WhatsApp Flow safely.
     """
-    # Flow data is passed positionally and constructed inside the helper
     return _send_content_template(user_phone, flow_type, user_name=user_name, user_id=user_id)
 
 
 def send_list_message_template(user_phone: str, template_key: str, variables: Dict[str, Any]) -> dict:
     """
-    Send an approved List Message Content Template (twilio/list-picker).
+    Send an approved Content Template (Quick Reply/List Message).
     """
-    # List message variables are passed directly via the 'variables' keyword
+    # This correctly passes the dictionary using the keyword argument.
     return _send_content_template(user_phone, template_key, variables=variables)
 
 
@@ -79,9 +77,6 @@ def _send_content_template(
 ) -> dict:
     """
     Internal helper to send any Content Template (Flow or List Message).
-    
-    If 'variables' is provided, it's used for List/Button messages.
-    If 'variables' is None, it uses user_name/user_id to construct Flow variables.
     """
     try:
         content_sid = FLOW_TEMPLATES.get(template_key)
@@ -92,7 +87,7 @@ def _send_content_template(
 
         # --- Variable Construction Logic ---
         if variables is not None:
-            # Use the dictionary passed directly (for List Messages)
+            # Use the dictionary passed directly for Content Templates
             content_vars = variables
         else:
             # Construct default Flow context variables
