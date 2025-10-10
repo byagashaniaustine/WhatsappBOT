@@ -108,7 +108,7 @@ def _send_content_template(
 
         message = client.messages.create(
             from_=from_number_whatsapp, 
-            to=f"whatsapp:{user_phone}",
+            to=user_phone,
             content_sid=content_sid,
             content_variables=content_vars_json
         )

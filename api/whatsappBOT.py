@@ -76,7 +76,7 @@ async def whatsapp_menu(data: dict):
             reply_text = (
                 " *Karibu katika huduma ya mikopo ya Manka*\n"
                 " Chagua huduma ungependa uhudumiwe:\n\n"
-                "1️⃣ Uhakiki Mikopo\n"
+                "1️⃣ Jifunze kuhusu Alama za Mkopo\n"
                 "2️⃣ Kiwango cha Mkopo\n"
                 "3️⃣ Nakopesheka!!\n"
                 "4️⃣ Kikokotoo cha Mkopo\n"
