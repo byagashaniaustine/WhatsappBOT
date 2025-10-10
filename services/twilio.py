@@ -5,23 +5,19 @@ import json
 import logging
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-from typing import Optional, Dict, Any, cast # Import 'cast'
+from typing import Optional, Dict, Any, cast
 
 logger = logging.getLogger(__name__)
 
 # Twilio credentials
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-# NOTE: This environment variable must contain the E.164 number (e.g., +1234567890)
 TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER") 
 
-# --- FIX: Ensure TWILIO_PHONE_NUMBER is treated as str after validation ---
 if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER):
-    # This check ensures we won't proceed with None values
     raise EnvironmentError("Missing Twilio credentials (SID, TOKEN, or PHONE NUMBER).")
 
-# We use typing.cast to tell the type checker that TWILIO_PHONE_NUMBER is guaranteed to be a string
-# because of the check above. This resolves the Pylance warning without suppressing the check.
+# Use cast to assert that TWILIO_PHONE_NUMBER is guaranteed to be a string here
 TWILIO_PHONE_NUMBER_STR = cast(str, TWILIO_PHONE_NUMBER)
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
@@ -44,7 +40,6 @@ def send_message(to: str, body: str) -> None:
     Safely send a basic WhatsApp message via Twilio.
     """
     try:
-        # Pylance is satisfied because we use TWILIO_PHONE_NUMBER_STR
         from_number_whatsapp = _get_whatsapp_from_number(TWILIO_PHONE_NUMBER_STR) 
         target_to = to if to.startswith("whatsapp:") else f"whatsapp:{to}"
         
@@ -109,7 +104,6 @@ def _send_content_template(
 
         content_vars_json = json.dumps(content_vars)
         
-        # **FIX**: Use the guaranteed string variable (TWILIO_PHONE_NUMBER_STR)
         from_number_whatsapp = _get_whatsapp_from_number(TWILIO_PHONE_NUMBER_STR)
 
         message = client.messages.create(
@@ -126,6 +120,7 @@ def _send_content_template(
         if e.status == 429:
             logger.warning(f"⚠️ Twilio limit reached. Skipping template to {user_phone}. Reason: {e.msg}")
         else:
+            # THIS IS THE ERROR LOCATION: HTTP 400 Invalid Parameter
             logger.error(f"❌ Twilio API error sending template for {user_phone}: {e.msg} (HTTP {e.status})", exc_info=True)
         return {"status": "error", "message": str(e)}
 
