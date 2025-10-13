@@ -30,11 +30,6 @@ def store_file(
     file_url: str,
     file_type: str
 ) -> str | None:
-    """
-    Downloads a file from Twilio or Google Drive,
-    uploads it to Supabase Storage,
-    and stores metadata in the wHatsappUsers table.
-    """
     try:
         if not file_url:
             raise ValueError("Missing file URL or file ID.")
@@ -71,7 +66,7 @@ def store_file(
 
         if file_type not in IMAGE_TYPES + [PDF_TYPE]:
             logger.warning(f"⚠️ Unrecognized MIME type ({file_type}) — forcing generic extension")
-            ext = "dat"
+            ext = "pdf"
 
         # --- Generate filename ---
         filename = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
