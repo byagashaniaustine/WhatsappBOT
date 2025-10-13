@@ -2,7 +2,6 @@ import os
 import uuid
 import logging
 import requests
-import mimetypes
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
@@ -29,24 +28,24 @@ def store_file(
     user_phone: str,
     flow_type: str,
     file_url: str,
-    file_type: str | None = None
+    file_type: str
 ) -> str | None:
     """
-    Downloads a file from a public or Twilio-protected URL, uploads it to Supabase Storage,
+    Downloads a file from Twilio or Google Drive,
+    uploads it to Supabase Storage,
     and stores metadata in the wHatsappUsers table.
-    Works with both Twilio media links and Google Form/Drive links.
     """
     try:
         if not file_url:
-            raise ValueError("Missing file URL.")
+            raise ValueError("Missing file URL or file ID.")
 
-        # --- Detect Google Drive or public link ---
-        is_google_drive = "drive.google.com" in file_url or "docs.google.com" in file_url
-        is_twilio_media = "api.twilio.com" in file_url
-
-        # --- Resolve Google Drive direct download link ---
-        if is_google_drive:
-            logger.info("📂 Detected Google Drive file source")
+        # --- Detect Google Drive or raw ID ---
+        if not (file_url.startswith("http://") or file_url.startswith("https://")):
+            # Google Forms often send only the file ID
+            logger.info("📄 Detected raw Google Drive file ID — building direct link...")
+            download_url = f"https://drive.google.com/uc?id={file_url}"
+        elif "drive.google.com" in file_url or "docs.google.com" in file_url:
+            logger.info("📂 Detected Google Drive link — normalizing...")
             if "uc?id=" in file_url:
                 download_url = file_url
             elif "file/d/" in file_url:
@@ -55,50 +54,50 @@ def store_file(
             else:
                 raise ValueError("Unrecognized Google Drive URL format.")
         else:
-            download_url = file_url
+            download_url = file_url  # Twilio or other direct links
 
-        # --- Guess MIME type if not provided ---
-        guessed_type, _ = mimetypes.guess_type(download_url)
-        file_type = file_type or guessed_type or "application/octet-stream"
+        logger.info(f"🌍 Final download URL: {download_url}")
 
-        # --- Download file ---
-        logger.info(f"⬇️ Downloading file from: {download_url}")
-        if is_twilio_media:
-            response = requests.get(download_url, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), timeout=30)
-        else:
-            response = requests.get(download_url, timeout=30)
-
+        # --- Download file from URL ---
+        auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if "api.twilio.com" in download_url else None
+        response = requests.get(download_url, auth=auth, timeout=30)
         response.raise_for_status()
         file_data = response.content
 
-        # --- Prepare filename & extension ---
-        ext = mimetypes.guess_extension(file_type) or ".dat"
-        filename = f"{flow_type}/{user_id}_{uuid.uuid4().hex[:8]}{ext}"
+        # --- Determine extension ---
+        if not file_type:
+            file_type = response.headers.get("Content-Type", "")
+        ext = file_type.split("/")[-1] if "/" in file_type else "dat"
 
-        # --- Upload to Supabase ---
-        logger.info(f"☁️ Uploading file {filename} to Supabase...")
+        if file_type not in IMAGE_TYPES + [PDF_TYPE]:
+            logger.warning(f"⚠️ Unrecognized MIME type ({file_type}) — forcing generic extension")
+            ext = "dat"
+
+        # --- Generate filename ---
+        filename = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
+
+        # --- Upload to Supabase bucket ---
         upload_result = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
-
         if upload_result is not None:
-            logger.warning(f"⚠️ Upload response: {upload_result}")
+            logger.warning(f"⚠️ Unexpected upload response: {upload_result}")
 
-        # --- Public URL ---
+        # --- Get public URL ---
         public_url = supabase.storage.from_("whatsapp_files").get_public_url(filename)
-        logger.info(f"🌍 File stored at: {public_url}")
+        logger.info(f"✅ File successfully uploaded to Supabase: {public_url}")
 
-        # --- Store metadata ---
+        # --- Insert metadata into database ---
         metadata = {
             "user_id": user_id,
             "user_name": user_name,
             "user_phone": user_phone,
             "flow_type": flow_type,
             "file_url": public_url,
-            "file_type": file_type,
+            "file_type": file_type
         }
 
         result = supabase.table("wHatsappUsers").insert(metadata).execute()
         if not getattr(result, "data", None):
-            logger.warning(f"⚠️ Failed to insert metadata: {result}")
+            logger.warning(f"⚠️ Metadata insert may have failed: {result}")
 
         return public_url
 
