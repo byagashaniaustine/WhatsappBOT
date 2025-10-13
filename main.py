@@ -1,58 +1,123 @@
+# main.py
 import logging
-import mimetypes
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.whatsappBOT import whatsapp_menu
-from api.whatsappfile import process_file_upload
+from api.whatsappfile import process_file_upload  # handles Supabase storage & analysis
+
+from services.twilio import send_message
 
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
 
 
+# -----------------------------------------------
+# 1️⃣ WHATSAPP WEBHOOK
+# -----------------------------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
     """
-    Handles incoming WhatsApp webhook requests.
-    Supports both:
-      - Normal text messages → triggers whatsapp_menu
-      - Flow form submissions with file uploads → triggers process_file_upload
+    Handles incoming messages from Twilio WhatsApp.
+    Menu logic and basic text interactions.
     """
     try:
-        form_data = await request.form()
-        data = dict(form_data)
+        data = await request.form()
+        payload = dict(data)
 
-        from_number = str(data.get("From") or "")
+        from_number = str(payload.get("From") or "")
         if not from_number:
-            logger.warning("Missing 'From' number in request")
+            logger.warning("⚠️ Missing 'From' number in request")
             return PlainTextResponse("OK")
 
-        user_id = str(data.get("user_id") or "")
-        user_name = str(data.get("user_name") or "")
-        flow_type = str(data.get("flow_type") or "")
-
-        # --- Check for media upload ---
-        num_media = str(data.get("NumMedia", 0))
-        if int(num_media) > 0:
-            file_url = str(data.get("MediaUrl0") or "")
-            file_type = str(data.get("MediaContentType0") or "")
-
-            if file_url:
-                result = process_file_upload(
-                    user_id=user_id,
-                    user_name=user_name,
-                    user_phone=from_number,
-                    flow_type=flow_type or "upload_documents",
-                    file_url=file_url,
-                    file_type=file_type,
-                )
-                logger.info(f"File upload processed: {result}")
-                return PlainTextResponse("OK")
-
-        # --- Otherwise treat as text message ---
-        await whatsapp_menu(data)
+        # Call WhatsApp menu
+        await whatsapp_menu(payload)
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"Error handling WhatsApp webhook: {str(e)}")
+        logger.exception(f"❌ Error handling WhatsApp webhook: {e}")
         return PlainTextResponse("Internal Server Error", status_code=500)
+
+
+# -----------------------------------------------
+# 2️⃣ GOOGLE FORM WEBHOOK
+# -----------------------------------------------
+@app.post("/google-form-webhook/")
+async def google_form_webhook(request: Request):
+    """
+    Receives data from Google Form submission.
+    Expected JSON: { name, email, phone, file_url }
+    Delegates analysis and storage to whatsappfile.py
+    """
+    try:
+        data = await request.json()
+        logger.info(f"📨 Received Google Form data: {data}")
+
+        name = data.get("name")
+        email = data.get("email")
+        phone = data.get("phone")
+        file_url = data.get("file_url")
+
+        if not phone:
+            raise ValueError("Phone number missing from form submission.")
+
+        # --- Process file via whatsappfile.py ---
+        if file_url:
+            result = process_file_upload(
+                user_id=email or "unknown",
+                user_name=name or "unknown",
+                user_phone=phone,
+                flow_type="google_form_upload",
+                file_url=file_url
+            )
+            logger.info(f"File processed: {result}")
+        else:
+            # If no file, just send acknowledgement
+            send_message(
+                to_phone=phone,
+                message=f"Halo {name}, tumepokea taarifa zako. Hakuna faili lililowasilishwa."
+            )
+            result = {"status": "success", "message": "No file submitted."}
+
+        return JSONResponse({"status": "success", "data": result})
+
+    except Exception as e:
+        logger.exception(f"❌ Error processing form submission: {e}")
+        return JSONResponse({"status": "error", "details": str(e)}, status_code=500)
+
+
+# -----------------------------------------------
+# 3️⃣ LOAN CALCULATOR ROUTE
+# -----------------------------------------------
+@app.post("/loan-calculator/")
+async def loan_calculator(request: Request):
+    """
+    Handles loan calculation requests.
+    Expected JSON: { amount, duration_months, rate }
+    """
+    try:
+        data = await request.json()
+        logger.info(f"📨 Loan calculation data: {data}")
+
+        amount = float(data.get("amount", 0))
+        duration = int(data.get("duration_months", 0))
+        rate = float(data.get("rate", 0))
+
+        # Simple interest calculation
+        interest = (amount * rate * duration) / 100
+        total_payment = amount + interest
+
+        result = {
+            "principal": amount,
+            "interest": interest,
+            "total_payment": total_payment,
+            "duration_months": duration,
+            "rate": rate,
+        }
+
+        logger.info(f"💰 Loan calculation result: {result}")
+        return JSONResponse({"status": "success", "data": result})
+
+    except Exception as e:
+        logger.exception(f"❌ Error calculating loan: {e}")
+        return JSONResponse({"status": "error", "details": str(e)}, status_code=500)
