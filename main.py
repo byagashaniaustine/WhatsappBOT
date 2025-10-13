@@ -11,10 +11,6 @@ from services.twilio import send_message
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
 
-
-# -----------------------------------------------
-# 1️⃣ WHATSAPP WEBHOOK
-# -----------------------------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
     """
@@ -38,24 +34,15 @@ async def whatsapp_webhook(request: Request):
         logger.exception(f"❌ Error handling WhatsApp webhook: {e}")
         return PlainTextResponse("Internal Server Error", status_code=500)
 
-
-# -----------------------------------------------
-# 2️⃣ GOOGLE FORM WEBHOOK
-# -----------------------------------------------
 @app.post("/google-form-webhook/")
 async def google_form_webhook(request: Request):
-    """
-    Receives data from Google Form submission.
-    Expected JSON: { name, email, phone, file_url }
-    Delegates analysis and storage to whatsappfile.py
-    """
     try:
         data = await request.json()
         logger.info(f"📨 Received Google Form data: {data}")
 
         name = data.get("name")
         email = data.get("email")
-        phone = data.get("phone")
+        phone = data.get("phone") or data.get("phone_number")
         file_url = data.get("file_url")
 
         if not phone:
