@@ -19,22 +19,22 @@ def process_file_upload(
     user_name: str,
     user_phone: str,
     flow_type: str,
-    file_url_or_id: str,
+    file_url: str,
     file_type: Optional[str] = None
 ) -> dict:
     """
-    Handles WhatsApp file uploads:
+    Handles file uploads from Google Forms or WhatsApp flows:
       - Stores file in Supabase
-      - Analyzes image via Gemini or PDF via MANKA
-      - Sends analysis result back via WhatsApp
+      - Analyzes image via Gemini or PDF via MANKA API
+      - Sends analysis summary via WhatsApp
     """
     try:
-        # --- Validate required inputs ---
-        if not all([user_id, user_name, user_phone, flow_type, file_url_or_id]):
+        # --- Validate required fields ---
+        if not all([user_id, user_name, user_phone, flow_type, file_url]):
             raise ValueError("Missing required parameters for file processing.")
 
-        # --- Determine MIME type ---
-        mime_type = file_type or mimetypes.guess_type(file_url_or_id)[0] or ""
+        # --- Detect MIME type ---
+        mime_type = file_type or mimetypes.guess_type(file_url)[0] or ""
         mime_type = mime_type.lower()
         is_pdf = mime_type == ALLOWED_PDF_TYPE
         is_image = mime_type in ALLOWED_IMAGE_TYPES
@@ -47,20 +47,21 @@ def process_file_upload(
             user_name=user_name,
             user_phone=user_phone,
             flow_type=flow_type,
-            file_url_or_id=file_url_or_id,
+            file_url=file_url,
             file_type=mime_type
         )
         if not stored_url:
             raise ValueError("Failed to store file in Supabase.")
-        logger.info(f"File stored at: {stored_url}")
 
-        # --- Download file content for analysis ---
+        logger.info(f"✅ File stored at: {stored_url}")
+
+        # --- Download file for analysis ---
         response = requests.get(stored_url, timeout=30)
         response.raise_for_status()
         file_data = response.content
         filename = stored_url.split("/")[-1] or "uploaded_file"
 
-        # --- Analyze the file ---
+        # --- Analyze file content ---
         if is_image:
             logger.info("Analyzing image via Gemini...")
             analysis_result = analyze_image(stored_url)
@@ -88,7 +89,6 @@ def process_file_upload(
         }
 
     except Exception as e:
-        logger.exception(f"Error processing file upload for {user_phone}: {e}")
-        error_text = f"❌ Error analyzing your file: {str(e)}"
-        send_message(user_phone, error_text)
+        logger.exception(f"❌ Error processing file upload for {user_phone}: {e}")
+        send_message(user_phone, f"❌ Error analyzing your file: {str(e)}")
         return {"status": "error", "message": str(e)}
