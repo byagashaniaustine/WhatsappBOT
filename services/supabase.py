@@ -74,7 +74,7 @@ def store_file(
             "file_type": file_type
         }
 
-        result = supabase.table("WHatsappUsers").insert(metadata).execute()
+        result = supabase.table("wHatsappUsers").insert(metadata).execute()
         if not getattr(result, "data", None):
             logger.warning(f"⚠️ Failed to insert metadata into Supabase: {result}")
 
