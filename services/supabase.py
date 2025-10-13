@@ -67,7 +67,7 @@ def store_file(
         # --- Determine extension ---
         if not file_type:
             file_type = response.headers.get("Content-Type", "")
-        ext = file_type.split("/")[-1] if "/" in file_type else "dat"
+        ext = file_type.split("/")[-1] if "/" in file_type else "pdf"
 
         if file_type not in IMAGE_TYPES + [PDF_TYPE]:
             logger.warning(f"⚠️ Unrecognized MIME type ({file_type}) — forcing generic extension")
