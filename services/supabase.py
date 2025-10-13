@@ -2,6 +2,7 @@ import os
 import uuid
 import logging
 import requests
+import mimetypes
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
@@ -28,37 +29,62 @@ def store_file(
     user_phone: str,
     flow_type: str,
     file_url: str,
-    file_type: str
+    file_type: str | None = None
 ) -> str | None:
     """
-    Downloads a file from Twilio or a public link,
-    uploads it to Supabase Storage,
+    Downloads a file from a public or Twilio-protected URL, uploads it to Supabase Storage,
     and stores metadata in the wHatsappUsers table.
+    Works with both Twilio media links and Google Form/Drive links.
     """
     try:
-        # --- Validate inputs ---
         if not file_url:
             raise ValueError("Missing file URL.")
-        if file_type not in IMAGE_TYPES + [PDF_TYPE]:
-            raise ValueError(f"Unsupported file type: {file_type}")
+
+        # --- Detect Google Drive or public link ---
+        is_google_drive = "drive.google.com" in file_url or "docs.google.com" in file_url
+        is_twilio_media = "api.twilio.com" in file_url
+
+        # --- Resolve Google Drive direct download link ---
+        if is_google_drive:
+            logger.info("📂 Detected Google Drive file source")
+            if "uc?id=" in file_url:
+                download_url = file_url
+            elif "file/d/" in file_url:
+                file_id = file_url.split("/file/d/")[1].split("/")[0]
+                download_url = f"https://drive.google.com/uc?id={file_id}"
+            else:
+                raise ValueError("Unrecognized Google Drive URL format.")
+        else:
+            download_url = file_url
+
+        # --- Guess MIME type if not provided ---
+        guessed_type, _ = mimetypes.guess_type(download_url)
+        file_type = file_type or guessed_type or "application/octet-stream"
 
         # --- Download file ---
-        response = requests.get(file_url, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), timeout=30)
+        logger.info(f"⬇️ Downloading file from: {download_url}")
+        if is_twilio_media:
+            response = requests.get(download_url, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), timeout=30)
+        else:
+            response = requests.get(download_url, timeout=30)
+
         response.raise_for_status()
         file_data = response.content
 
-        # --- Generate filename ---
-        ext = file_type.split("/")[-1] if "/" in file_type else "dat"
-        filename = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
+        # --- Prepare filename & extension ---
+        ext = mimetypes.guess_extension(file_type) or ".dat"
+        filename = f"{flow_type}/{user_id}_{uuid.uuid4().hex[:8]}{ext}"
 
-        # --- Upload to Supabase bucket ---
+        # --- Upload to Supabase ---
+        logger.info(f"☁️ Uploading file {filename} to Supabase...")
         upload_result = supabase.storage.from_("whatsapp_files").upload(filename, file_data)
-        if upload_result is not None:
-            logger.warning(f"⚠️ Unexpected upload response: {upload_result}")
 
-        # --- Get public URL ---
+        if upload_result is not None:
+            logger.warning(f"⚠️ Upload response: {upload_result}")
+
+        # --- Public URL ---
         public_url = supabase.storage.from_("whatsapp_files").get_public_url(filename)
-        logger.info(f"🌍 File available at: {public_url}")
+        logger.info(f"🌍 File stored at: {public_url}")
 
         # --- Store metadata ---
         metadata = {
@@ -67,15 +93,15 @@ def store_file(
             "user_phone": user_phone,
             "flow_type": flow_type,
             "file_url": public_url,
-            "file_type": file_type
+            "file_type": file_type,
         }
 
         result = supabase.table("wHatsappUsers").insert(metadata).execute()
         if not getattr(result, "data", None):
-            logger.warning(f"⚠️ Failed to insert metadata into Supabase: {result}")
+            logger.warning(f"⚠️ Failed to insert metadata: {result}")
 
         return public_url
 
     except Exception as e:
-        logger.exception(f"❌ Error storing file for user {user_phone}: {str(e)}")
+        logger.exception(f"❌ Error storing file for {user_phone}: {str(e)}")
         return None
