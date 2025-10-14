@@ -13,10 +13,6 @@ app = FastAPI()
 
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
-    """
-    Handles incoming messages from Twilio WhatsApp.
-    Menu logic and basic text interactions.
-    """
     try:
         data = await request.form()
         payload = dict(data)
@@ -72,16 +68,8 @@ async def google_form_webhook(request: Request):
         logger.exception(f"❌ Error processing form submission: {e}")
         return JSONResponse({"status": "error", "details": str(e)}, status_code=500)
 
-
-# -----------------------------------------------
-# 3️⃣ LOAN CALCULATOR ROUTE
-# -----------------------------------------------
 @app.post("/loan-calculator/")
 async def loan_calculator(request: Request):
-    """
-    Handles loan calculation requests.
-    Expected JSON: { amount, duration_months, rate }
-    """
     try:
         data = await request.json()
         logger.info(f"📨 Loan calculation data: {data}")
