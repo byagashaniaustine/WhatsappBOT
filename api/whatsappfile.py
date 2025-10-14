@@ -6,7 +6,7 @@ from services.supabase import store_file
 from services.gemini import analyze_image
 from services.pdfendpoint import analyze_pdf
 from services.twilio import send_message
-from services.drive_services import get_file_metadata, download_file_from_drive
+from services.drive_service import get_file_metadata, download_file_from_drive
 
 logger = logging.getLogger(__name__)
 
