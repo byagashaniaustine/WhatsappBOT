@@ -9,8 +9,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 logger = logging.getLogger(__name__)
 
-
-service_account_info = json.loads(os.environ.get["GOOGLE_SERVICE_ACCOUNT_JSON"])
+service_account_info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 try:
