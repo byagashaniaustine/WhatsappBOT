@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 from supabase import create_client, Client
-from services.google_drive import get_file_metadata, download_file_from_drive  # 👈 use your existing Drive module
+from services.drive_service import get_file_metadata, download_file_from_drive  # 👈 use your existing Drive module
 
 logger = logging.getLogger(__name__)
 
