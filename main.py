@@ -43,19 +43,19 @@ async def google_form_webhook(request: Request):
         name = data.get("name")
         email = data.get("email")
         phone = data.get("phone") or data.get("phone_number")
-        file_url = data.get("file_url")
+        file_id = data.get("file_url")
 
         if not phone:
             raise ValueError("Phone number missing from form submission.")
 
         # --- Process file via whatsappfile.py ---
-        if file_url:
+        if file_id:
             result = process_file_upload(
                 user_id=email or "unknown",
                 user_name=name or "unknown",
                 user_phone=phone,
                 flow_type="google_form_upload",
-                file_url=file_url
+                file_id=file_id
             )
             logger.info(f"File processed: {result}")
         else:

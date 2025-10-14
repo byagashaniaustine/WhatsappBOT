@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "soy-bazaar-474713-p2",
+  "private_key_id": "58f4b561f0cf9d17cf48855947b091be56ee305b",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwzEPU+AZsZ+GM\nlm6JFUhX2nXd0A8gAy74m1dxC34mSDJZqTLaTNSbOBzP+03WZwF7/waLADAq5m0r\nQfCgpOPDMApgI4NsF3oB5mCGuogZJFIETlan1SVeX/0nEBvyXU710O8c76WKn35g\nD3s9EOyoaqzB+mRFaDfjiGE96FSk+cMgOAOsP7PUqrgMO0Kaim6iDDYZQrO3ZT+i\nu2Aq5va9i/ruPuF+F3M9g4nmp+5eZcDfPQ0UgGdRmnUXkztHv3uPor7938SRqrjO\nnGa/hSz+9j9fMxx/DGMVjW/BABQZ/vL5ogmQX+5+6xmoTMpugur+5lWkfy/4WDKV\nNxquJPw/AgMBAAECggEASqqZ4zG0lMfyi8tkd2STnvbWXI1oNd7iUYBZl5aA+m33\nRcKdhXB5QeyazoOVxfzOta1o9/9mWFfktyYsF8xLnL2HRD77XAU2M+M11PCmVefu\n836aPltYYtkrMvoss1kQ5eQNeC0FvtvJJYykQZAKQr56o5m6C04OfHu2hcy/IsTb\nNwY3QsTyveSMlthRvWgN7A3JqyPjb2MrhOBLWahFn05t9jyfV227xpD/Mke8YW69\ntqNKmnYdzRKYHYPV+H7VOUUCYWyZ4+Rwl5wmtqOuOrImSElEmn6EHJqbugo2F2bO\njY4z8UWFLchKdiWtSE0N8B5kIy7AJ8MWvn5642Z5IQKBgQD2ESolEUbqJFk2nfDh\np2U/8dpbui16P3gRKuh+MODcms8Nxi5YwxP2YMvLCE7c4ZHeJHBNUV8hs7SChXfD\nKIqTxbFwVllevbDfdePoUw7ZQJS5XNxEjBLqNWN08lA0Srp0JetedDppiZX2/UmR\nWVnL0KK6I+wJx0YJHS9cqkIN5wKBgQC370dz3DbDHTA0NJXiSyAxql7TRyZnexWJ\nZ+9xNegkKm7QcNUCj5G/hx5I36cWsYA5n2TxW91virF02rIWnRAKZgMIMJbi33qc\nugi8s1z1LRc0x0chUO+uTqrDSZwZI9DOelvrbxR/I0TkO1FUJWYu1oqaIyZBRMde\nOvSe3Wpj6QKBgCgl8s9rezuWxKuhp3zZ+C4vwuX2gZcRpgB/FMIKLZYw+BmSPVuk\nMKyhbH7rExr8/vTU0zH6VeBE1u344uqHwdyMhAAFRr2ri6FaNd5hNuoBnIKGATZ5\n+FgYb+rT4nw1uShcS4P0yNcRaNOMziUWBA26M+LVG50Y03eHOIQRD4f/AoGBAK4A\nkInMc4nVHPrmHDy9cTFKyPX6Qxx11gPs7RkeNAOymK5bb0dC5lBX1JB/86OGO5VH\ncsjZbPvOKt4u3XaDEt+jbY7b2IG7hFSrsQRCcdgG1gM52dJsrLEq/mRMSH2H4krS\neg6ZQLydctiuPNvrnWUF1IzIX7IzDJ/aCfwX3kOxAoGAMeGiFjmBzqV53mcVtP+5\nYlrBLeH4Lr03ylxL00B1fLNT/TouS1a1G78cdY0hnPw64YEOVCcxqEu+AXX1Pb8X\nD0umelletYzXAkxjUu8lnyPlRmNfRdn+OO84JyeOCoCiPqIRG3HaeKFbo0DbqMoc\n/OnuBf2oGoDiNKYve0yXSUA=\n-----END PRIVATE KEY-----\n",
+  "client_email": "whatsapp-bot-integration@soy-bazaar-474713-p2.iam.gserviceaccount.com",
+  "client_id": "114927049401264411473",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/whatsapp-bot-integration%40soy-bazaar-474713-p2.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

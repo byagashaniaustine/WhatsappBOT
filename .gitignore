@@ -24,6 +24,7 @@ env/
 .installed.cfg
 # Environments
 .venv
+.soy-bazaar-474713-p2-58f4b561f0cf.json
 
 # --------------------
 # IDE and Tooling
