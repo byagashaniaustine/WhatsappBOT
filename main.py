@@ -55,7 +55,7 @@ async def google_form_webhook(request: Request):
                 user_name=name or "unknown",
                 user_phone=phone,
                 flow_type="google_form_upload",
-                file_id=file_id
+                drive_file_id=file_id
             )
             logger.info(f"File processed: {result}")
         else:
