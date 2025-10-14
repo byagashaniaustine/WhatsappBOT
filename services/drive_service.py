@@ -6,15 +6,16 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-
 logger = logging.getLogger(__name__)
 
+# Load service account info from Railway environment variable
 service_account_info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 try:
-    credentials = service_account.Credentials.from_service_account_file(
-       service_account_info, scopes=SCOPES
+    # ✅ Use from_service_account_info because we loaded JSON from env
+    credentials = service_account.Credentials.from_service_account_info(
+        service_account_info, scopes=SCOPES
     )
     drive_service = build("drive", "v3", credentials=credentials)
     logger.info("✅ Google Drive service initialized successfully.")
