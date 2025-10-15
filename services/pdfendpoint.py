@@ -45,10 +45,10 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
                 
             logger.error(f"MANKA FAILED: {error_message}")
             
-            # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
+            # --- Ujumbe kwa Kiswahili: Hitilafu ya API ---
             return (
-                f"⚠️ *Kushindwa Kusindika na Manka*: Hatukuweza kukamilisha uchambuzi wa hati yako."
-                f"\n\nMaelezo ya ndani: {error_content}. Tafadhali thibitisha Ufunguo wa API (API Key) na MANKA_ENDPOINT."
+                f"⚠️ *Hitilafu Kutoka kwa Manka*: Samahani, uchambuzi haukukamilika."
+                f"\n\nMaelezo ya ndani: {error_content}. Tafadhali thibitisha mipangilio ya huduma."
             )
             # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
         
@@ -61,24 +61,24 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             
             if affordability_data is None:
                 logger.error("Manka returned a dictionary but was missing the expected 'affordability_scores' key.")
-                # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
-                return "⚠️ *Hitilafu ya Mfumo*: Muundo wa uchambuzi haufai. Sehemu ya 'affordability_scores' haipo. Tafadhali wasiliana na usaidizi."
+                # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Data Missing) ---
+                return "⚠️ *Hitilafu ya Mfumo*: Muundo wa majibu haukufaa. Tafadhali wasiliana na usaidizi."
                 # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
 
         else:
             logger.error(f"Unexpected top-level data structure: {type(response_data)}. Full response data: {response_data}")
-            # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
+            # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Wrong Data Structure) ---
             return "⚠️ *Hitilafu ya Mfumo*: Manka imerejesha muundo wa data usiotarajiwa. Tafadhali wasiliana na usaidizi."
             # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
 
         if isinstance(affordability_data, str):
             logger.warning(f"Affordability calculation notice received: {affordability_data}")
             
-            # --- UJUMBE WA DATA HAIKUTOSHA KWA KISWAHILI ---
+            # --- Ujumbe kwa Kiswahili: Data haikutosha ---
             return (
-                f"*❌ Hali ya Kustahili Mkopo: DATA HAIKUTOSHA*\n"
+                f"*❌ Hali ya Mkopo: DATA HAIKUTOSHA*\n"
                 f"*---------------------------------------------*\n\n"
-                f"Hatukuweza kukamilisha utaratibu wa kutoa mkopo kwa sababu:\n"
+                f"Hatukuweza kukamilisha utaratibu wa mkopo kwa sababu:\n"
                 f"*{affordability_data}.*\n\n"
                 f"Ili kustahili, tafadhali tuma taarifa inayoonyesha *kiwango cha chini cha miezi 3 kamili* ya miamala yako."
             )
@@ -91,17 +91,17 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         
             max_credit = max(high_risk, medium_risk, low_risk)
             
-            # --- UJUMBE WA MAFANIKIO KWA KISWAHILI ---
+            # --- Ujumbe kwa Kiswahili: Kustahili Mkopo (Qualified) ---
             report = (
-                f"*✅ Hali ya Kustahili Mkopo: UMESTAHILI*\n"
+                f"*✅ Hali ya Mkopo: UMESTAHILI*\n"
                 f"*---------------------------------------------*\n\n"
-                f"Kulingana na uchambuzi wa taarifa yako, *unastahili kupata mkopo* hadi kiwango cha:\n\n"
-                f"*{'TZS {0:,.0f}'.format(max_credit)}* (Kiwango cha Juu cha Mkopo)\n\n"
-                f"*Viainisho vya Mikopo Vya Kina:*\n"
+                f"Kulingana na uchambuzi wetu, *unastahili kupata mkopo* hadi kiwango cha:\n\n"
+                f"*{'TZS {0:,.0f}'.format(max_credit)}* (Kiwango cha Juu Kinachowezekana)\n\n"
+                f"*Viainisho vya Mkopo:*\n"
                 f"--- 1. *Hatari Kubwa*: TZS {high_risk:,.0f}\n"
                 f"--- 2. *Hatari ya Kati*: TZS {medium_risk:,.0f}\n"
                 f"--- 3. *Hatari Ndogo*: TZS {low_risk:,.0f}\n\n"
-                f"Tunapendekeza kuanza na mkopo wa Hatari Ndogo kwa idhini ya haraka."
+                f"Tunapendekeza kuanza na kiasi cha hatari ndogo kwa idhini ya haraka."
             )
             # --- MWISHO UJUMBE WA MAFANIKIO KWA KISWAHILI ---
 
@@ -109,18 +109,18 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
 
         else:
             logger.error(f"Unexpected data type for affordability scores: {type(affordability_data)}. Full response data: {response_data}")
-            # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
-            return "⚠️ *Hitilafu ya Mfumo*: Aina ya data ya uchambuzi haifanyi kazi. Tafadhali wasiliana na usaidizi."
+            # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Wrong Data Type) ---
+            return "⚠️ *Hitilafu ya Mfumo*: Aina ya data ya uchambuzi haikufaa. Tafadhali wasiliana na usaidizi."
             # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
 
 
     except requests.exceptions.Timeout:
         logger.error("Manka API timed out.")
-        # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
-        return "⚠️ *Kushindwa Kusindika na Manka*: Muunganisho wa API umeisha muda (timed out). Tafadhali jaribu tena baada ya muda mfupi."
+        # --- Ujumbe kwa Kiswahili: API timed out ---
+        return "⚠️ *Hitilafu ya Muunganisho*: Manka API ilikata muunganisho (timed out). Tafadhali jaribu tena baada ya muda mfupi."
         # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
     except Exception as e:
         logger.exception(f"General Error analyzing PDF.")
-        # --- UJUMBE WA HITILAFU KWA KISWAHILI ---
-        return f"⚠️ *Hitilafu ya Mfumo Mkuu*: Kulikuwa na shida ya jumla wakati wa kuchambua hati. Tafadhali wasiliana na usaidizi."
+        # --- Ujumbe kwa Kiswahili: Hitilafu ya Jumla ---
+        return f"⚠️ *Hitilafu ya Jumla*: Kulikuwa na shida isiyotarajiwa wakati wa kuchambua hati. Tafadhali wasiliana na usaidizi."
         # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
