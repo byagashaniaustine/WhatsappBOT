@@ -26,10 +26,10 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         }
 
         response = requests.post(
-            str(MANKA_ENDPOINT), 
+           str(MANKA_ENDPOINT), 
             headers=headers, 
-            data=data,          
-            files=files,        
+            data=data,           
+            files=files,         
             timeout=60
         )
         
@@ -38,19 +38,13 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             
             try:
                 details = response.json()
-                error_content = details.get("message") or details.get("error") or "Hitilafu Isiyojulikana ya API"
-                error_message += f" Maelezo: {error_content}"
+                error_content = details.get("message") or details.get("error") or "Unknown API Error"
+                error_message += f" Details: {error_content}"
             except requests.exceptions.JSONDecodeError:
-                error_message += f" Sehemu ya Jibu: Jibu lisilo la JSON lilipokewa. Linaanza na: '{response.text[:30]}...'"
+                error_message += f" Body: Non-JSON response received. Starts with: '{response.text[:30]}...'"
                 
             logger.error(f"MANKA FAILED: {error_message}")
-            
-            # --- Ujumbe kwa Kiswahili: Hitilafu ya API ---
-            return (
-                f"⚠️ *Hitilafu Kutoka kwa Manka*: Samahani, uchambuzi haukukamilika."
-                f"\n\nMaelezo ya ndani: {error_content}. Tafadhali thibitisha mipangilio ya huduma."
-            )
-            # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
+            return f"⚠️ Manka Processing Failed: {error_message}. Please check API key and endpoint."
         
         response_data = response.json()
         affordability_data = None
@@ -61,66 +55,54 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             
             if affordability_data is None:
                 logger.error("Manka returned a dictionary but was missing the expected 'affordability_scores' key.")
-                # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Data Missing) ---
-                return "⚠️ *Hitilafu ya Mfumo*: Muundo wa majibu haukufaa. Tafadhali wasiliana na usaidizi."
-                # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
-
+                return f"⚠️ Hitilafu ya Mfumo: Muundo wa uchambuzi si halali. 'affordability_scores' inakosekana. Tafadhali wasiliana na usaidizi."
+                
         else:
             logger.error(f"Unexpected top-level data structure: {type(response_data)}. Full response data: {response_data}")
-            # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Wrong Data Structure) ---
-            return "⚠️ *Hitilafu ya Mfumo*: Manka imerejesha muundo wa data usiotarajiwa. Tafadhali wasiliana na usaidizi."
-            # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
+            return "⚠️ Hitilafu ya Mfumo: Manka amerudisha muundo wa data wa ngazi ya juu usiotarajiwa. Tafadhali wasiliana na huduma kwa wateja."
 
         if isinstance(affordability_data, str):
             logger.warning(f"Affordability calculation notice received: {affordability_data}")
             
-            # --- Ujumbe kwa Kiswahili: Data haikutosha ---
             return (
-                f"*❌ Hali ya Mkopo: DATA HAIKUTOSHA*\n"
-                f"*---------------------------------------------*\n\n"
-                f"Hatukuweza kukamilisha utaratibu wa mkopo kwa sababu:\n"
-                f"*{affordability_data}.*\n\n"
-                f"Ili kustahili, tafadhali tuma taarifa inayoonyesha *kiwango cha chini cha miezi 3 kamili* ya miamala yako."
+                f"❌ Hali ya Kufuzu kwa Mkopo: DATA HAITOSHI (INSUFFICIENT DATA)\n"
+                f"---------------------------------------------\n\n"
+                f"Hatukuweza kutoa ofa ya mkopo kwa sababu:\n"
+                f"{affordability_data}.\n\n"
+                f"Ili kufuzu, tafadhali wasilisha taarifa inayoonyesha kiwango cha chini cha miezi 3 kamili ya historia ya miamala."
             )
-            # --- MWISHO UJUMBE WA DATA HAIKUTOSHA KWA KISWAHILI ---
             
         elif isinstance(affordability_data, dict):
             high_risk = affordability_data.get('high_risk', 0.0)
             medium_risk = affordability_data.get('medium_risk', 0.0)
             low_risk = affordability_data.get('low_risk', 0.0)
         
+    
+
             max_credit = max(high_risk, medium_risk, low_risk)
             
-            # --- Ujumbe kwa Kiswahili: Kustahili Mkopo (Qualified) ---
             report = (
-                f"*✅ Hali ya Mkopo: UMESTAHILI*\n"
-                f"*---------------------------------------------*\n\n"
-                f"Kulingana na uchambuzi wetu, *unastahili kupata mkopo* hadi kiwango cha:\n\n"
-                f"*{'TZS {0:,.0f}'.format(max_credit)}* (Kiwango cha Juu Kinachowezekana)\n\n"
-                f"*Viainisho vya Mkopo:*\n"
-                f"--- 1. *Hatari Kubwa*: TZS {high_risk:,.0f}\n"
-                f"--- 2. *Hatari ya Kati*: TZS {medium_risk:,.0f}\n"
-                f"--- 3. *Hatari Ndogo*: TZS {low_risk:,.0f}\n\n"
-                f"Tunapendekeza kuanza na kiasi cha hatari ndogo kwa idhini ya haraka."
+                f"✅ Hali ya Kufuzu kwa Mkopo: UMEKUBALIKA (QUALIFIED)\n"
+                f"---------------------------------------------\n\n"
+                f"Kulingana na uchambuzi wa taarifa zako, unakubalika kupata mkopo usiozidi:\n\n"
+                f"{'TZS {0:,.0f}'.format(max_credit)} (Uwezo wa Juu Kabisa wa Ofa)\n\n"
+                f"Viwango vya Mikopo Kina:\n"
+                f"--- 1. Kiwango cha Hatari Juu (High Risk): TZS {high_risk:,.0f}\n"
+                f"--- 2. Kiwango cha Hatari ya Kati (Moderate Risk): TZS {medium_risk:,.0f}\n"
+                f"--- 3. Kiwango cha Hatari Chini (Low Risk): TZS {low_risk:,.0f}\n\n"
+                f"Tunapendekeza uanze na ofa ya kiwango cha hatari chini kwa ajili ya idhini ya haraka."
             )
-            # --- MWISHO UJUMBE WA MAFANIKIO KWA KISWAHILI ---
 
             return report
 
         else:
             logger.error(f"Unexpected data type for affordability scores: {type(affordability_data)}. Full response data: {response_data}")
-            # --- Ujumbe kwa Kiswahili: Hitilafu ya mfumo (Wrong Data Type) ---
-            return "⚠️ *Hitilafu ya Mfumo*: Aina ya data ya uchambuzi haikufaa. Tafadhali wasiliana na usaidizi."
-            # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
+            return "⚠️ System Error: Affordability data type invalid. Please contact support."
 
 
     except requests.exceptions.Timeout:
         logger.error("Manka API timed out.")
-        # --- Ujumbe kwa Kiswahili: API timed out ---
-        return "⚠️ *Hitilafu ya Muunganisho*: Manka API ilikata muunganisho (timed out). Tafadhali jaribu tena baada ya muda mfupi."
-        # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
+        return "⚠️ Manka Processing Failed: The API timed out. Please try again later."
     except Exception as e:
         logger.exception(f"General Error analyzing PDF.")
-        # --- Ujumbe kwa Kiswahili: Hitilafu ya Jumla ---
-        return f"⚠️ *Hitilafu ya Jumla*: Kulikuwa na shida isiyotarajiwa wakati wa kuchambua hati. Tafadhali wasiliana na usaidizi."
-        # --- MWISHO UJUMBE WA HITILAFU KWA KISWAHILI ---
+        return f"⚠️ General System Error analyzing PDF: {type(e).__name__}: {str(e)}"

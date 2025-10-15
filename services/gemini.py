@@ -32,7 +32,7 @@ def analyze_image(image_url: str) -> str:
             mime_type = 'image/jpeg'
         else:
             # Ujumbe kwa Kiswahili: Umbizo la picha haliruhusiwi
-            return "⚠️ Umbizo la picha haliungwi mkono. Tumia jpg/jpeg/png tu."
+            return "⚠️ ingizo la picha haliungwi mkono. Tumia jpg/jpeg/png tu."
 
         image_response = requests.get(image_url, timeout=30)
         image_response.raise_for_status() 
