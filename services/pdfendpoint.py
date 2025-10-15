@@ -81,9 +81,9 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             
         elif isinstance(affordability_data, dict):
             # Safe retrieval with defaults in case of missing keys, preventing calculation errors
-            high_risk = affordability_data.get('high_risk', 0.0)
-            medium_risk = affordability_data.get('medium_risk', 0.0)
-            low_risk = affordability_data.get('low_risk', 0.0)
+            high_risk = affordability_data.get('high', 0.0)
+            medium_risk = affordability_data.get('moderate', 0.0)
+            low_risk = affordability_data.get('low', 0.0)
             
             max_credit = max(high_risk, medium_risk, low_risk)
             
