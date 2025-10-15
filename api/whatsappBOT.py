@@ -14,52 +14,48 @@ async def whatsapp_menu(data: dict):
             return PlainTextResponse("OK")
 
         incoming_msg = str(data.get("Body") or "").strip().lower()
-
-        main_menu = {
-            "1": {
-                "title": "Jifunze kuhusu Alama ya Mkopo (Credit Scoring)",
-                "description": (
-                    "Ni kipimo kinachoonyesha uaminifu wako wa kifedha. "
-                    "Benki hutumia alama hii kuamua kama unastahili kukopeshwa. "
-                    "Lipa kwa wakati na tumia mikopo kwa uangalifu ili kuboresha alama yako."
-                )
-            },
-            "2": {
-                "title": "Uwezo wa Mikopo (Credit Bandwidth)",
-                "description": (
-                    "Ni kiwango cha fedha ambacho unaweza kukopeshwa kulingana na hali yako ya kifedha na historia ya ulipaji. "
-                    "Kadri unavyolipa kwa wakati na kuwa na alama nzuri ya mkopo, ndivyo uwezo wako wa kukopa unavyoongezeka."
-                )
-            },
-            "3": {
-                "title": "Nakopesheka!!",
-                "description": (
-                    "Kwa huduma ya Nakopesheka, tafadhali jaza fomu hii ya Google kwa taarifa zako na uambatanishe ya nyaraka za malipo na miamala za miezi isiopungua miezi 3:\n"
-                    "📄 Google Form: google form:https://docs.google.com/forms/d/e/1FAIpQLSdOL1-gUYj8SG_D9o06Qq_pMFBJVc_ihHzLtF8TUmeA0_QDvA/viewform?usp=header"
-                )
-            },
-            "4": {
-                "title": "Kikokotoo cha Mkopo (Loan Calculator)",
-                "description": (
-                    "Ili kukokotoa mkopo, tafadhali jaza fomu hii ya Google na weka kiasi cha pesa cha marejesho,mda wa marejesho,na kiasi cha riba:\n"
-                    "💰 Google Form: https://docs.google.com/forms/d/e/1FAIpQLSdHiaWEqm9w9LqK71ipdCks6nQpZ-2ZszyLhYkFpuCxkbh98w/viewform?usp=header"
-                )
-            },
-            "5": {
-                "title": "Aina za Mikopo",
-                "description": (
-                    "Mikopo inaweza kugawanyika kwa njia mbili: kwa riba au kwa lengo/dhamana. "
-                    "Mfano: Fixed, Variable, Floating, Capped, Mkopo wa Simu, Gari, Nyumba, Biashara, Elimu, Haraka."
-                )
-            },
-            "6": {
-                "title": "Huduma za Nilipo",
-                "description": (
-                    "Huduma zinazotolewa sasa ni pamoja na: kununua bidhaa ndogo, malipo ya kidijitali, gharama za dharura, mikopo ya muda mfupi."
-                )
-            }
-        }
-
+main_menu = {
+    "1": {
+        "title": "Jifunze kuhusu Alama ya Mkopo (Credit Scoring)",
+        "description": (
+            "Ni kipimo kinachoonyesha **uaminifu wako wa kifedha** na rekodi yako ya ulipaji wa mikopo ya zamani. "
+            "Alama nzuri ni *muhimu* sana kwa sababu inakupa fursa ya kupata **mikopo kwa haraka**, kwa **riba ndogo zaidi**, "
+            "na kwa **viwango vya juu zaidi** kutoka kwa taasisi za kifedha. Kudumisha alama nzuri kunahitaji ulipaji wa deni "
+            "kwa wakati na kutotumia zaidi ya kiwango chako cha mkopo."
+        )
+    },
+    "2": {
+        "title": "Uwezo wa Mikopo (Credit Bandwidth)",
+        "description": (
+            "Uwezo wa Mikopo huashiria **kiwango cha juu zaidi** cha mkopo ambao taasisi za kifedha zinaweza kukuachilia. "
+            "Kiasi hiki huhesabiwa kwa kuchambua *kipato* chako, *madeni* yako ya sasa, na *historia yako ya ulipaji*. "
+            "Uwezo mkubwa wa mikopo hukupa uwezo wa kujadiliana vyema na kuchukua mikopo mikubwa kwa ajili ya uwekezaji au miradi mikubwa."
+        )
+    },
+    "3": {
+        "title": "Nakopesheka!!",
+        "description": (
+            "Kwa huduma ya Nakopesheka, tafadhali jaza fomu hii ya Google kwa taarifa zako na uambatanishe ya nyaraka za malipo na miamala za miezi isiopungua miezi 3:\n"
+            "📄 Google Form: google form:https://docs.google.com/forms/d/e/1FAIpQLSdOL1-gUYj8SG_D9o06Qq_pMFBJVc_ihHzLtF8TUmeA0_QDvA/viewform?usp=header"
+        )
+    },
+    "4": {
+        "title": "Kikokotoo cha Mkopo (Loan Calculator)",
+        "description": (
+            "Ili kukokotoa mkopo, tafadhali jaza fomu hii ya Google na weka kiasi cha pesa cha marejesho,mda wa marejesho,na kiasi cha riba:\n"
+            "💰 Google Form: https://docs.google.com/forms/d/e/1FAIpQLSdHiaWEqm9w9LqK71ipdCks6nQpZ-2ZszyLhYkFpuCxkbh98w/viewform?usp=header"
+        )
+    },
+    "5": {
+        "title": "Aina za Mikopo",
+        "description": (
+            "Mikopo huwekwa katika kategoria kulingana na **Dhamana/Lengo** na **Aina ya Riba**.\n"
+            "   * **Mikopo Kulingana na Lengo/Dhamana:** Hujumuisha **Mkopo wa Nyumba** (kwa muda mrefu, riba ya chini), "
+            "**Mkopo wa Biashara** (kupanua biashara), **Mkopo wa Elimu** (kwa masomo),
+    )
+    }
+    }
+    
         # --- Show main menu ---
         if incoming_msg in ["hi", "hello", "start", "menu", ""]:
             reply_text = (
