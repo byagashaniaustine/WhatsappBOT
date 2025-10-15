@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 import math
 from typing import Dict, Any
 from api.whatsappBOT import whatsapp_menu
-from api.whatsappfile import process_file_upload  # handles Supabase storage & analysis
+from api.whatsappfile import process_file_upload
 
 from services.twilio import send_message
 
