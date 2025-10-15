@@ -4,9 +4,6 @@ import logging
 from supabase import create_client, Client
 from typing import Optional
 
-# NOTE: Removed get_file_metadata and download_file_from_drive imports
-# as they are no longer needed inside this function.
-
 logger = logging.getLogger(__name__)
 
 # --- Supabase Setup ---
@@ -14,7 +11,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    # Use a custom exception or standard ValueError/EnvironmentError
+    # Tumia EnvironmentError badala ya ValueError kwa ajili ya vigezo vinavyokosekana
     raise EnvironmentError("❌ Supabase credentials missing. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -29,22 +26,31 @@ def store_file(
     user_name: str,
     user_phone: str,
     flow_type: str,
-    drive_file_id: str, # The Google Drive ID (kept for logging/tracking)
-    file_data: bytes,   # File bytes already downloaded by the caller (for efficiency)
-    mime_type: str,     # MIME type already determined by the caller
+    file_name: str,    # <-- NEW: Kupokea jina la faili lililotengenezwa na mtoa wito (whatsappfile.py)
+    file_data: bytes, 
+    mime_type: str, 
 ) -> dict | None:
+    """
+    Hupakia data ya faili kwenye Supabase Storage na kuhifadhi metadata yake katika jedwali.
+
+    Args:
+        user_id (str): Kitambulisho cha mtumiaji.
+        user_name (str): Jina la mtumiaji.
+        user_phone (str): Namba ya simu.
+        flow_type (str): Aina ya mtiririko.
+        file_name (str): Jina kamili la kipekee la faili (k.m., 'user_id_uuid.ext').
+        file_data (bytes): Data ya faili.
+        mime_type (str): Aina ya MIME ya faili.
+    """
     try:
-        logger.info(f"📄 Preparing file for storage: Drive ID {drive_file_id} ({mime_type})")
+        # Njia ya Supabase Storage: {user_id}/{file_name}
+        supabase_path = f"{user_id}/{file_name}"
+        logger.info(f"📄 Preparing file for storage at path: {supabase_path} ({mime_type})")
 
         # --- Check supported types ---
         if mime_type not in IMAGE_TYPES + [PDF_TYPE]:
-            # This check might be redundant if done by the caller, but serves as a safeguard
+            # Hii ni kinga, kwani upakuaji unapaswa kuangalia kwanza.
             raise ValueError(f"Unsupported file type: {mime_type}")
-
-        # --- Define path & extension ---
-        # Get extension from MIME type. Using a UUID for secure, unique pathing.
-        ext = mime_type.split("/")[-1]
-        supabase_path = f"{user_id}/{uuid.uuid4().hex[:8]}.{ext}"
 
         # --- Upload to Supabase bucket ---
         # Specify the content-type header for correct serving
@@ -54,8 +60,6 @@ def store_file(
             {'content-type': mime_type} 
         )
         if upload_result is not None and not isinstance(upload_result, dict):
-            # Supabase Python lib can return None/dict/Response depending on success/error
-            # This check is safer than the original 'is not None'
             logger.warning(f"⚠️ Unexpected upload response: {upload_result}")
 
         # --- Get public URL ---
@@ -64,20 +68,20 @@ def store_file(
         )
         logger.info(f"✅ File stored successfully: {public_url}")
 
-        # --- Save metadata in DB (Matches your required table columns) ---
+        # --- Save metadata in DB ---
         metadata = {
             "user_id": user_id,
             "user_name": user_name,
             "user_phone": user_phone,
             "flow_type": flow_type,
-            "file_type": mime_type, # Required column
-            "file_url": public_url, # Required column
-            # Consider adding "drive_file_id": drive_file_id for audit/tracking
+            "file_type": mime_type, 
+            "file_url": public_url, 
         }
 
+        # Jedwali la "wHatsappUsers" linatumika kwa metadata
         result = supabase.table("wHatsappUsers").insert(metadata).execute()
         
-        # Check if the insert was successful based on the library's response structure
+        # Hakikisha metadata imehifadhiwa
         if not (getattr(result, "data", None) and len(result.data) > 0):
             logger.warning("⚠️ Metadata not stored properly in Supabase.")
 

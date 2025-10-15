@@ -27,10 +27,6 @@ MODEL_NAME = "gemini-2.5-flash"
 # 🛑 FIX: Updated signature to accept file bytes and MIME type directly, 
 # removing the need to fetch the file from a URL.
 def analyze_image(image_bytes: bytes, mime_type: str) -> str:
-    """
-    Analyzes image content using Gemini, taking raw bytes and MIME type as input.
-    The analysis prompt is in Swahili, and the response is expected in Swahili.
-    """
     try:
         # Check if the determined MIME type is supported
         if mime_type not in ALLOWED_IMAGE_TYPES:
