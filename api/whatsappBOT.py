@@ -35,14 +35,14 @@ async def whatsapp_menu(data: dict):
                 "title": "Nakopesheka!!",
                 "description": (
                     "Kwa huduma ya Nakopesheka, tafadhali jaza fomu hii ya Google kwa taarifa zako na uambatanishe ya nyaraka za malipo na miamala za miezi isiopungua miezi 3:\n"
-                    "📄 Google Form: google form:https://docs.google.com/forms/d/e/1FAIpQLScctiesPi8OaDu2tVW-Ke396v7XJmY43m01BXE-E3ov58Ph0g/viewform?usp=header"
+                    "📄 Google Form: google form:https://docs.google.com/forms/d/e/1FAIpQLSdOL1-gUYj8SG_D9o06Qq_pMFBJVc_ihHzLtF8TUmeA0_QDvA/viewform?usp=header"
                 )
             },
             "4": {
                 "title": "Kikokotoo cha Mkopo (Loan Calculator)",
                 "description": (
                     "Ili kukokotoa mkopo, tafadhali jaza fomu hii ya Google na weka kiasi cha pesa cha marejesho,mda wa marejesho,na kiasi cha riba:\n"
-                    "💰 Google Form: https://forms.gle/EXAMPLE_LOAN_CALCULATOR"
+                    "💰 Google Form: https://docs.google.com/forms/d/e/1FAIpQLSdHiaWEqm9w9LqK71ipdCks6nQpZ-2ZszyLhYkFpuCxkbh98w/viewform?usp=header"
                 )
             },
             "5": {
