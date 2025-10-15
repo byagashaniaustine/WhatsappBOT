@@ -112,4 +112,4 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         return "⚠️ Manka Processing Failed: The API timed out. Please try again later."
     except Exception as e:
         logger.exception(f"General Error analyzing PDF.")
-        return f"⚠️ General System Error analyzing PDF: {type(e).__name__}: {str(e)}"
+        return f"⚠️ General System Error analyzing PDF"

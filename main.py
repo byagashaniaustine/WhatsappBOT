@@ -1,16 +1,20 @@
-# main.py
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 import math
 from typing import Dict, Any
 from api.whatsappBOT import whatsapp_menu
-from api.whatsappfile import process_file_upload  # handles Supabase storage & analysis
+from api.whatsappfile import process_file_upload  # handles Supabase storage & analysis
 
 from services.twilio import send_message
 
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
+
+# Placeholder for store_loan_result if not imported
+def store_loan_result(data: Dict[str, Any]):
+    """Placeholder function for storing loan results, assumes implementation elsewhere."""
+    logger.info(f"Storing loan result data: {data}")
 
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
@@ -89,11 +93,26 @@ async def loan_calculator(request: Request):
              # This check fails if the key 'phone' is missing or its value is None/empty string
              return JSONResponse({"status": "error", "details": "Missing phone number for feedback. Check if 'phone' key exists in payload."}, status_code=400)
 
-        # 2. EXTRACT & CONVERT CALCULATION PARAMETERS using robust function
-        # The 'amount' field from the form is now the user's Monthly Repayment capacity (M)
-        monthly_repayment_capacity = _safe_float(data.get("amount"))
-        duration = int(_safe_float(data.get("duration_months"))) # Duration is expected as an integer
-        rate = _safe_float(data.get("rate")) # Annual Rate (%)
+        # 2. EXTRACT & CONVERT CALCULATION PARAMETERS using normal float parsing
+        
+        # Safely get string values for validation
+        monthly_repayment_capacity_str = data.get("amount")
+        duration_str = data.get("duration_months")
+        rate_str = data.get("rate")
+
+        # Explicitly check for missing parameters before attempting float conversion
+        if not monthly_repayment_capacity_str:
+             raise ValueError("Monthly repayment capacity ('amount') is missing or empty.")
+        if not duration_str:
+             raise ValueError("Loan duration ('duration_months') is missing or empty.")
+        if not rate_str:
+             raise ValueError("Interest rate ('rate') is missing or empty.")
+
+        # Convert using normal float() function. This will raise a ValueError if the string is non-numeric.
+        monthly_repayment_capacity = float(monthly_repayment_capacity_str)
+        # Convert duration via float() then int() to handle both string and potential float input
+        duration = int(float(duration_str))
+        rate = float(rate_str) # Annual Rate (%)
 
         logger.info(f"📊 Extracted values: Capacity={monthly_repayment_capacity}, Duration={duration}, Rate={rate}")
 
@@ -125,6 +144,8 @@ async def loan_calculator(request: Request):
             total_interest = total_payment - principal
 
         # 4. PREPARE RESULT OBJECT
+        total_payment = monthly_repayment_capacity * duration
+        
         result_data = {
             "principal_calculated": principal, # The maximum loan amount the user can get
             "monthly_repayment_capacity": monthly_repayment_capacity, # Input (M)

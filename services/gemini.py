@@ -58,8 +58,8 @@ def analyze_image(image_bytes: bytes, mime_type: str) -> str:
 
     except APIError as e:
         # Kushughulikia hitilafu mahususi za Gemini API
-        return f"⚠️ Hitilafu ya API ya Gemini: {str(e)}"
+        return f"⚠️ Hitilafu ya API ya Gemini"
     except Exception as e:
         # Kushughulikia hitilafu zote za jumla
         logger.error(f"General Error analyzing image: {e}", exc_info=True)
-        return f"⚠️ Hitilafu ya Jumla katika kuchambua picha: {str(e)}"
+        return f"⚠️ Hitilafu ya Jumla katika kuchambua picha"
