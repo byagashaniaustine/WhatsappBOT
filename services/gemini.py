@@ -4,6 +4,7 @@ import logging
 from google import genai
 from google.genai.errors import APIError
 from google.genai.types import Part
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -19,24 +20,25 @@ except Exception as e:
         f"Failed to initialize Gemini Client. Ensure your API key is set correctly. Error: {e}"
     )
 
-ALLOWED_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png"]
+# Note: Using the MIME types defined in the caller for consistency
+ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
 MODEL_NAME = "gemini-2.5-flash"
 
-def analyze_image(image_url: str) -> str:
+# 🛑 FIX: Updated signature to accept file bytes and MIME type directly, 
+# removing the need to fetch the file from a URL.
+def analyze_image(image_bytes: bytes, mime_type: str) -> str:
+    """
+    Analyzes image content using Gemini, taking raw bytes and MIME type as input.
+    The analysis prompt is in Swahili, and the response is expected in Swahili.
+    """
     try:
-        clean_url_for_check = image_url.split("?")[0]
-        ext = clean_url_for_check.split(".")[-1].lower()
-        if ext == 'png':
-            mime_type = 'image/png'
-        elif ext in ['jpg', 'jpeg']:
-            mime_type = 'image/jpeg'
-        else:
+        # Check if the determined MIME type is supported
+        if mime_type not in ALLOWED_IMAGE_TYPES:
             # Ujumbe kwa Kiswahili: Umbizo la picha haliruhusiwi
-            return "⚠️ ingizo la picha haliungwi mkono. Tumia jpg/jpeg/png tu."
+            exts = [t.split('/')[1] for t in ALLOWED_IMAGE_TYPES if t != 'image/jpg']
+            return f"⚠️ Ingizo la picha la aina ya '{mime_type}' haliruhusiwi. Tumia moja ya: {', '.join(exts)}."
 
-        image_response = requests.get(image_url, timeout=30)
-        image_response.raise_for_status() 
-        image_bytes = image_response.content
+        # Create the image Part directly from the provided bytes and MIME type
         image_part = Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
         # Prompt kwa Kiswahili: Kuomba maelezo ya picha yatolewe kwa Kiswahili
@@ -51,12 +53,9 @@ def analyze_image(image_url: str) -> str:
             contents=contents,
         )
 
-        # 5. Hakikisha jibu linarejeshwa, ikiwa jibu ni tupu, rudisha ujumbe wa Kiswahili.
+        # Hakikisha jibu linarejeshwa, ikiwa jibu ni tupu, rudisha ujumbe wa Kiswahili.
         return response.text or "⚠️ Gemini haikurejesha maelezo yoyote."
 
-    except requests.exceptions.RequestException as req_e:
-        # Kushughulikia hitilafu za kupakua picha kutoka kwa kiungo
-        return f"⚠️ Imeshindwa kupakua picha kutoka kwa kiungo: {type(req_e).__name__} - {str(req_e)}"
     except APIError as e:
         # Kushughulikia hitilafu mahususi za Gemini API
         return f"⚠️ Hitilafu ya API ya Gemini: {str(e)}"
