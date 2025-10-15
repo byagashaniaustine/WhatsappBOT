@@ -31,14 +31,16 @@ def analyze_image(image_url: str) -> str:
         elif ext in ['jpg', 'jpeg']:
             mime_type = 'image/jpeg'
         else:
-            return "⚠️ Unsupported image format. Use jpg/jpeg/png only."
+            # Ujumbe kwa Kiswahili: Umbizo la picha haliruhusiwi
+            return "⚠️ Umbizo la picha haliungwi mkono. Tumia jpg/jpeg/png tu."
 
         image_response = requests.get(image_url, timeout=30)
         image_response.raise_for_status() 
         image_bytes = image_response.content
         image_part = Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
-        prompt = "Describe this image in detail maximum 400 characters."
+        # Prompt kwa Kiswahili: Kuomba maelezo ya picha yatolewe kwa Kiswahili
+        prompt = "Fafanua picha hii kwa lugha ya Kiswahili, usizidi herufi 400."
         contents = [
             prompt,
             image_part, 
@@ -49,16 +51,16 @@ def analyze_image(image_url: str) -> str:
             contents=contents,
         )
 
-        # 5. Ensure a string is always returned, handling potential None from response.text
-        return response.text or "⚠️ Gemini returned an empty response text."
+        # 5. Hakikisha jibu linarejeshwa, ikiwa jibu ni tupu, rudisha ujumbe wa Kiswahili.
+        return response.text or "⚠️ Gemini haikurejesha maelezo yoyote."
 
     except requests.exceptions.RequestException as req_e:
-        # Handle errors during the image fetching process (e.g., URL not found, network error)
-        return f"⚠️ Failed to fetch image from URL: {type(req_e).__name__} - {str(req_e)}"
+        # Kushughulikia hitilafu za kupakua picha kutoka kwa kiungo
+        return f"⚠️ Imeshindwa kupakua picha kutoka kwa kiungo: {type(req_e).__name__} - {str(req_e)}"
     except APIError as e:
-        # Handle specific Gemini API errors
-        return f"⚠️ Gemini API Error: {str(e)}"
+        # Kushughulikia hitilafu mahususi za Gemini API
+        return f"⚠️ Hitilafu ya API ya Gemini: {str(e)}"
     except Exception as e:
-        # Handle all other general errors
+        # Kushughulikia hitilafu zote za jumla
         logger.error(f"General Error analyzing image: {e}", exc_info=True)
-        return f"⚠️ General Error analyzing image: {str(e)}"
+        return f"⚠️ Hitilafu ya Jumla katika kuchambua picha: {str(e)}"

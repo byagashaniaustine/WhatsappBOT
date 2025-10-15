@@ -75,23 +75,27 @@ async def loan_calculator(request: Request):
     Calculates the maximum possible Principal (Loan Amount) a user can get 
     based on their comfortable Monthly Repayment capacity, Term, and Rate.
     """
+    data = {} # Initialize data outside try for error handling access
     try:
         data = await request.json()
         logger.info(f"📨 Loan calculation data received: {data}")
 
         # 1. EXTRACT USER INFO
         user_phone = data.get("phone")
-        user_name = data.get("name", "Customer")
+        user_name = data.get("name", "Mteja")
         
         # Essential validation for feedback
         if not user_phone:
-             return JSONResponse({"status": "error", "details": "Missing phone number for feedback."}, status_code=400)
+             # This check fails if the key 'phone' is missing or its value is None/empty string
+             return JSONResponse({"status": "error", "details": "Missing phone number for feedback. Check if 'phone' key exists in payload."}, status_code=400)
 
-        # 2. EXTRACT & CONVERT CALCULATION PARAMETERS
+        # 2. EXTRACT & CONVERT CALCULATION PARAMETERS using robust function
         # The 'amount' field from the form is now the user's Monthly Repayment capacity (M)
-        monthly_repayment_capacity = float(data.get("amount", 0))
-        duration = int(data.get("duration_months", 0))
-        rate = float(data.get("rate", 0)) # Annual Rate (%)
+        monthly_repayment_capacity = _safe_float(data.get("amount"))
+        duration = int(_safe_float(data.get("duration_months"))) # Duration is expected as an integer
+        rate = _safe_float(data.get("rate")) # Annual Rate (%)
+
+        logger.info(f"📊 Extracted values: Capacity={monthly_repayment_capacity}, Duration={duration}, Rate={rate}")
 
         # 3. PERFORM INVERTED AMORTIZATION CALCULATION
         
@@ -134,20 +138,23 @@ async def loan_calculator(request: Request):
         }
         logger.info(f"💰 Loan calculation result: {result_data}")
         
-        # 5. FORMAT AND SEND FEEDBACK MESSAGE
+        # 5. FORMAT AND SEND FEEDBACK MESSAGE (IN SWAHILI)
         result_message = (
-            f"Hello {user_name},\n\n"
-            f"Loan Affordability Analysis:\n"
+            f"Habari {user_name},\n\n"
+            f"Matokeo ya kiwango cha mkopo unaoweza kupata:\n"
             f"----------------------------------\n"
-            f"Your Monthly Repayment Capacity: {monthly_repayment_capacity:,.2f}\n"
-            f"Interest Rate: {rate:,.2f}%\n"
-            f"Loan Term: {duration} months\n\n"
-            f"🚀 *Maximum Loan Amount (Principal):* {principal:,.2f}\n"
-            f"Total Repayment (over {duration} months): {total_payment:,.2f}\n"
-            f"Total Interest Paid: {total_interest:,.2f}"
+            f"Uwezo Wako wa Kurejesha Kila Mwezi: {monthly_repayment_capacity:,.2f}\n"
+            f"Kiwango cha Riba: {rate:,.2f}%\n"
+            f"Muda wa Mkopo: {duration} miezi\n\n"
+            f"🚀 *Kiwango cha Juu cha Mkopo Unachoweza Kupata (Principal):* {principal:,.2f}\n"
+            f"Jumla ya Marejesho (kwa miezi {duration}): {total_payment:,.2f}\n"
+            f"Jumla ya Riba Uliyolipa: {total_interest:,.2f}"
         )
 
         send_message(user_phone, result_message)
+        
+        # 6. STORE RESULT
+        store_loan_result(result_data)
         
         # 7. RETURN SUCCESS
         return JSONResponse({"status": "success", "message": "Affordability calculated and feedback sent.", "data": result_data})
@@ -155,10 +162,14 @@ async def loan_calculator(request: Request):
     except ValueError as ve:
         error_msg = f"Invalid loan data provided. Details: {str(ve)}"
         logger.exception(f"❌ Value Error in loan calculation: {error_msg}")
-        send_message(data.get("phone", ""), "❌ Error: Please ensure all fields are valid numbers and the loan term is greater than zero.")
+        # Send error message in Swahili
+        error_swahili = "❌ Samahani: Tafadhali hakikisha viwango vyote ni namba sahihi na muda wa mkopo ni zaidi ya sifuri."
+        send_message(data.get("phone", ""), error_swahili)
         return JSONResponse({"status": "error", "details": error_msg}, status_code=400)
 
     except Exception as e:
         logger.exception(f"❌ Critical Error calculating loan: {e}")
-        send_message(data.get("phone", ""), f"❌ Sorry, a critical server error occurred during calculation. Please try again later.")
+        # Send critical error message in Swahili
+        error_swahili = "❌ Samahani, kuna tatizo kubwa la kiufundi limetokea wakati wa kuhesabu mkopo. Tafadhali jaribu tena baadaye."
+        send_message(data.get("phone", ""), error_swahili)
         return JSONResponse({"status": "error", "details": str(e)}, status_code=500)
