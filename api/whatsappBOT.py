@@ -91,7 +91,7 @@ async def whatsapp_menu(data: dict):
         incoming_msg_lower = incoming_msg.lower()
 
         # --- Show main menu ---
-        if incoming_msg_lower in ["hi", "hello", "start", "menu", ""]:
+        if incoming_msg_lower in ["hi", "hello", "start", "menu","main menu", "yo","good morning","good evening","anza","good afternoon","habari","mambo"]:
             reply_text = (
                 " *Karibu katika huduma ya mikopo ya Manka*\n"
                 " Chagua huduma ungependa uhudumiwe:\n\n"
@@ -135,11 +135,22 @@ async def whatsapp_menu(data: dict):
                 return PlainTextResponse("OK")
 
         # --- Fallback ---
-        send_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu' ili kuona huduma zetu.")
+        send_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu','main menu','habari','mambo' au neno 'anza'  ili kuona huduma zetu.")
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"Error in whatsapp_menu: {str(e)}")
-        # Send a generic error message
-        send_message(to=from_number_full, body="❌ Samahani, kosa la kiufundi limetokea. Jaribu tena au tuma 'menu'.")
+        logger.exception(f"Error in whatsapp_menu: {e}")
+
+        try:
+            # Safely send a user-friendly error message if sender info is available
+            from_number_safe = locals().get("from_number_full", None)
+            if from_number_safe:
+                send_message(
+                    from_number_safe,
+                    "❌ Samahani, kosa la kiufundi limetokea. Jaribu tena au tuma 'menu'."
+                )
+        except Exception as inner_error:
+            logger.warning(f"⚠️ Failed to send error message: {inner_error}")
+            pass  # Suppress further errors
+
         return PlainTextResponse("Internal Server Error", status_code=500)
