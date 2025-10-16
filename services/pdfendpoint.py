@@ -1,20 +1,16 @@
 import os
 import requests
 import logging
-from gemini import analyze_file_with_gemini  # <-- import from gemini.py
+from services.gemini import analyze_file_with_gemini  # <-- import from gemini.py
 
 logger = logging.getLogger(__name__)
 
-# --- API Configuration ---
 
 MANKA_API_KEY = os.environ.get("MANKA_API_KEY")
 MANKA_ENDPOINT = os.environ.get("MANKA_ENDPOINT") 
 
 if not MANKA_API_KEY or not MANKA_ENDPOINT:
     logger.warning("MANKA_API_KEY or MANKA_ENDPOINT not set. Only Gemini fallback will be functional.")
-
-
-# --- Manka Primary Analysis Function with Gemini Fallback ---
 
 def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
     """
