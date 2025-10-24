@@ -1,5 +1,6 @@
 import logging
 import math
+from services.meta import send_meta_whatsapp_message
 from services.twilio import send_message
 from fastapi.responses import PlainTextResponse
 
@@ -20,7 +21,7 @@ async def loan_calc(data: dict):
         "*Kiasi: [uwezo wa kurejesha], Muda: [miezi], Riba: [asilimia ya mwaka]*\n\n"
         "Mfano: *Kiasi: 200000, Muda: 12, Riba: 18*"
     )
-    send_message(to=from_number_full, body=message)
+    send_meta_whatsapp_message(to=from_number_full, body=message)
     logger.info(f"Loan calculator prompt sent to {from_number_full}")
     return PlainTextResponse("OK")
 
@@ -102,7 +103,7 @@ async def whatsapp_menu(data: dict):
                 "5️⃣ Aina za Mikopo\n"
                 "6️⃣ Huduma zinazotolewa kwa Mkopo"
             )
-            send_message(to=from_number_full, body=reply_text)
+            send_meta_whatsapp_message(to=from_number_full, body=reply_text)
             return PlainTextResponse("OK")
 
         # --- Handle specific commands/selections ---
@@ -131,11 +132,11 @@ async def whatsapp_menu(data: dict):
             else:
                 item = main_menu[selection]
                 reply_text = f"*{item['title']}*\n{item['description']}"
-                send_message(to=from_number_full, body=reply_text)
+                send_meta_whatsapp_message(to=from_number_full, body=reply_text)
                 return PlainTextResponse("OK")
 
         # --- Fallback ---
-        send_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu','main menu','habari','mambo' au neno 'anza'  ili kuona huduma zetu.")
+        send_meta_whatsapp_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu','main menu','habari','mambo' au neno 'anza'  ili kuona huduma zetu.")
         return PlainTextResponse("OK")
 
     except Exception as e:
@@ -145,9 +146,9 @@ async def whatsapp_menu(data: dict):
             # Safely send a user-friendly error message if sender info is available
             from_number_safe = locals().get("from_number_full", None)
             if from_number_safe:
-                send_message(
-                    from_number_safe,
-                    "❌ Samahani, kosa la kiufundi limetokea. Jaribu tena au tuma 'menu'."
+                send_meta_whatsapp_message(
+                    to=from_number_safe,
+                    body="❌ Samahani, kosa la kiufundi limetokea. Jaribu tena au tuma 'menu'."
                 )
         except Exception as inner_error:
             logger.warning(f"⚠️ Failed to send error message: {inner_error}")

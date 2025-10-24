@@ -1,12 +1,10 @@
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
-import math
 from typing import Dict, Any
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
-
-from services.twilio import send_message
+from services.meta import send_meta_whatsapp_message
 
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
@@ -16,14 +14,10 @@ async def whatsapp_webhook(request: Request):
     try:
         data = await request.form()
         payload = dict(data)
-
         from_number = str(payload.get("From") or "")
         if not from_number:
             logger.warning("⚠️ Missing 'From' number in request")
             return PlainTextResponse("OK")
-
-        # --- Check for Media Content (Files/Images) ---
-        # Twilio sends 'NumMedia' when a file is attached
         num_media = int(str(payload.get("NumMedia", 0)))
         
         if num_media > 0:
@@ -35,7 +29,6 @@ async def whatsapp_webhook(request: Request):
             
             if media_url and mime_type:
                 # Pass media details for download, analysis, and storage
-                # Using from_number for both ID and Phone since user name is unknown in webhook
                 result = process_file_upload(
                     user_id=from_number, 
                     user_name="", # Name is not provided in a standard Twilio media webhook
@@ -47,11 +40,16 @@ async def whatsapp_webhook(request: Request):
                 logger.info(f"File analysis and storage result: {result}")
 
             else:
-                send_message(from_number,"❌ Samahani, nimeshindwa kupata kiungo au aina ya faili ulilotuma.")
+                # Use the imported Meta-compatible sending function
+                send_meta_whatsapp_message(
+                    from_number,
+                    "❌ Samahani, nimeshindwa kupata kiungo au aina ya faili ulilotuma."
+                )
                 
         else:
             # Normal text message or other non-media content
             logger.info(f"💬 Text message content detected from {from_number}. Passing to menu handler.")
+            # Note: whatsapp_menu should ideally use the same Meta sending function internally
             await whatsapp_menu(payload)
             
         return PlainTextResponse("OK")
@@ -59,18 +57,18 @@ async def whatsapp_webhook(request: Request):
     except Exception as e:
         logger.exception(f"❌ Error handling WhatsApp webhook: {e}")
 
-        # Attempt to send a generic error back to the user
+        # Attempt to send a generic error back to the user using the Meta-compatible function
         try:
             # Safely handle case where from_number might not exist
             from_number_safe = locals().get("from_number", None)
             if from_number_safe:
-                send_message(
+                # Use the imported Meta-compatible sending function
+                send_meta_whatsapp_message(
                     from_number_safe,
                     "❌ Samahani, kuna tatizo la kiufundi limetokea. Tafadhali jaribu tena."
                 )
         except Exception as inner_error:
-            logger.warning(f"⚠️ Failed to send error message to user: {inner_error}")
-            # Suppress further errors to prevent recursive failure
+            logger.warning(f"⚠️ Failed to send error message to user via Meta API service: {inner_error}")
             pass
 
         return PlainTextResponse("Internal Server Error", status_code=500)
