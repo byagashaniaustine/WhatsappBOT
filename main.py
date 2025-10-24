@@ -96,7 +96,7 @@ async def whatsapp_webhook(request: Request):
             
             logger.info(f"💬 Text message detected from {from_number}. Passing to menu handler.")
             # Pass the full, raw Meta payload for full context if needed by whatsapp_menu
-            await whatsapp_menu(meta_payload)
+            await whatsapp_menu(standard_payload)
             
         elif message_type in ["image", "document", "audio", "video"]:
             # --- Handle Media Content ---
