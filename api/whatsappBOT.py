@@ -1,7 +1,6 @@
 import logging
 import math
 from services.meta import send_meta_whatsapp_message
-from services.twilio import send_message
 from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger("whatsapp_app")
@@ -120,7 +119,8 @@ async def whatsapp_menu(data: dict):
             if selection == "3":
                 item = main_menu[selection]
                 reply_text = f"*{item['title']}*\n\n{item['description']}"
-                send_message(to=from_number_full, body=reply_text)
+                # REKEBISHO: Tumia send_meta_whatsapp_message badala ya send_message (Twilio)
+                send_meta_whatsapp_message(to=from_number_full, body=reply_text) 
                 return PlainTextResponse("OK")
                 
             # 4. Kikokotoo cha Mkopo (Call the loan calculation initiation function)
@@ -136,7 +136,7 @@ async def whatsapp_menu(data: dict):
                 return PlainTextResponse("OK")
 
         # --- Fallback ---
-        send_meta_whatsapp_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu','main menu','habari','mambo' au neno 'anza'  ili kuona huduma zetu.")
+        send_meta_whatsapp_message(to=from_number_full, body="Samahani, sikuelewi. Jibu na neno 'menu','main menu','habari','mambo' au neno 'anza'  ili kuona huduma zetu.")
         return PlainTextResponse("OK")
 
     except Exception as e:
@@ -152,6 +152,6 @@ async def whatsapp_menu(data: dict):
                 )
         except Exception as inner_error:
             logger.warning(f"⚠️ Failed to send error message: {inner_error}")
-            pass  # Suppress further errors
+            pass # Suppress further errors
 
         return PlainTextResponse("Internal Server Error", status_code=500)
