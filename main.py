@@ -3,11 +3,9 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from typing import Dict, Any
-
-# Assuming these modules exist in your project
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message 
+from services.meta import send_meta_whatsapp_message, get_media_url 
 
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
@@ -19,10 +17,6 @@ WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "YOUR_SECRET_TOKEN
 # --- 1. WEBHOOK VERIFICATION (GET) ENDPOINT ---
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
-    """
-    Handles the Meta verification request (GET request) when setting up the webhook.
-    (This part remains the same)
-    """
     try:
         mode = request.query_params.get("hub.mode")
         token = request.query_params.get("hub.verify_token")
@@ -47,9 +41,6 @@ async def verify_webhook(request: Request):
 # --- 2. INCOMING MESSAGE (POST) ENDPOINT (UPDATED FOR META JSON) ---
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
-    """
-    Handles incoming messages (text and media) using the Meta/Cloud API JSON payload format.
-    """
     try:
         # Meta sends a JSON payload in the body, not form data
         meta_payload = await request.json()
@@ -105,23 +96,31 @@ async def whatsapp_webhook(request: Request):
             mime_type = media_data.get("mime_type")
             
             if media_id and mime_type:
-                # IMPORTANT: Meta's payload only gives the media ID, not the URL. 
-                # Your process_file_upload needs to be updated to use the media ID and 
-                # call the Meta API to get the actual URL or download the file.
-                # For now, we simulate the Twilio flow by passing key details.
+                # 1. Use the new function to convert the ID into the actual authenticated download URL.
+                try:
+                    # CRITICAL FIX: Call the new function here to get the real URL
+                    actual_media_url = get_media_url(media_id) 
+                except Exception as api_error:
+                    # Log the specific failure and send a user-friendly error message
+                    logger.error(f"❌ Failed to retrieve media URL for ID {media_id}: {api_error}")
+                    send_meta_whatsapp_message(
+                        from_number,
+                        "❌ Samahani, nimeshindwa kupata kiungo cha faili ulilotuma. Tafadhali jaribu tena."
+                    )
+                    return PlainTextResponse("OK")
+
+                
                 standard_payload["NumMedia"] = 1
                 
                 logger.info(f"📁 Media content detected from {from_number}. Type: {message_type}")
                 
-                # NOTE: Since we cannot easily get the MediaUrl0 here, we pass the ID and Mime Type
-                # Assuming process_file_upload can handle the ID instead of a URL. 
-                # If not, this function will need significant modification.
+                # 2. Pass the corrected URL to the file processor.
                 result = process_file_upload(
                     user_id=from_number, 
                     user_name="",
                     user_phone=from_number,
                     flow_type="whatsapp_upload",
-                    media_url=media_id,  # Pass ID instead of URL
+                    media_url=actual_media_url,# <-- NOW PASSING THE CORRECT URL
                     mime_type=mime_type
                 )
                 logger.info(f"File analysis and storage result: {result}")
