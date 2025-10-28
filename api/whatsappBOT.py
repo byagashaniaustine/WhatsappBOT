@@ -4,14 +4,16 @@ from fastapi.responses import PlainTextResponse
 from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
 logger = logging.getLogger("whatsapp_app")
+
+# -----------------------------
+# 🔹 FLOW TRIGGERS
+# -----------------------------
 def send_whatsapp_flow_calc(to_number: str):
     """Tuma Flow ya Kikokotoo cha Mkopo"""
     logger.info(f"📊 Sending Loan Calculator FLOW to {to_number}")
     return send_meta_whatsapp_flow(
         to=to_number,
-        flow_id="1623606141936116",  # Kikokotoo Flow ID
-        screen="ELIGIBILITY_CHECK",
-        cta_text="Angalia kiwango chako cha mkopo"  # matches Footer label
+        flow_id="1623606141936116"  # Kikokotoo Flow ID
     )
 
 def send_whatsapp_flow_nakopesheka(to_number: str):
@@ -19,11 +21,13 @@ def send_whatsapp_flow_nakopesheka(to_number: str):
     logger.info(f"🚀 Sending Nakopesheka FLOW to {to_number}")
     return send_meta_whatsapp_flow(
         to=to_number,
-        flow_id="760682547026386",  # Nakopesheka Flow ID
-        screen="LOAN_APPLICATION",
-        cta_text="Anza Fomu ya Mkopo"
+        flow_id="760682547026386"  # Nakopesheka Flow ID
     )
 
+
+# -----------------------------
+# 🔹 LOAN CALCULATOR LOGIC
+# -----------------------------
 def calculate_max_loan_principal(repayment_capacity: float, duration_months: int, annual_rate_percent: float) -> float:
     """Hesabu kiasi cha juu cha mkopo kulingana na uwezo wa kulipa, muda, na riba."""
     if annual_rate_percent == 0:
@@ -37,12 +41,12 @@ def calculate_max_loan_principal(repayment_capacity: float, duration_months: int
     except Exception:
         return 0.0
 
+
 async def process_loan_calculator(from_number: str, form_data: dict):
     if not from_number.startswith("+"):
         from_number = "+" + from_number
 
     try:
-        # ⚡ Read keys exactly as sent from Flow JSON
         repayment_capacity = float(form_data.get("kipato_mwezi", 0))
         duration_months = int(form_data.get("muda_miezi", 0))
         annual_rate_percent = float(form_data.get("riba_mwaka", 0))
@@ -68,6 +72,10 @@ async def process_loan_calculator(from_number: str, form_data: dict):
     logger.info(f"📩 Loan result sent to {from_number}")
     return PlainTextResponse("OK")
 
+
+# -----------------------------
+# 🔹 NAKOPESHEKA FLOW LOGIC
+# -----------------------------
 async def process_nakopesheka_flow(from_number: str, form_data: dict):
     """
     Backend receives flow submission from Nakopesheka.
@@ -87,6 +95,10 @@ async def process_nakopesheka_flow(from_number: str, form_data: dict):
     logger.info(f"📩 Nakopesheka instruction sent to {from_number}")
     return PlainTextResponse("OK")
 
+
+# -----------------------------
+# 🔹 MAIN MENU
+# -----------------------------
 main_menu = {
     "1": {
         "title": "Alama ya Mikopo (Credit Scoring)",
@@ -118,6 +130,9 @@ main_menu = {
 }
 
 
+# -----------------------------
+# 🔹 WHATSAPP MENU HANDLER
+# -----------------------------
 async def whatsapp_menu(data: dict):
     """
     Main menu and text-based WhatsApp command handler.
@@ -129,7 +144,7 @@ async def whatsapp_menu(data: dict):
 
         incoming_msg = str(data.get("Body") or "").strip().lower()
 
-        # 👋 Main Menu
+        # 👋 Main Menu Trigger
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
             reply = (
                 "👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\n"
