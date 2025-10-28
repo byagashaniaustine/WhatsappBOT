@@ -8,7 +8,7 @@ logger.setLevel(logging.INFO)
 
 ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
-API_URL = f"https://graph.facebook.com/v24.0/{PHONE_NUMBER_ID}/messages"
+API_URL = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
 MEDIA_API_BASE_URL = "https://graph.facebook.com/v24.0/"
 
 def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
