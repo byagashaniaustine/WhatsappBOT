@@ -1,163 +1,195 @@
 import logging
 import math
-from services.meta import send_meta_whatsapp_message
 from fastapi.responses import PlainTextResponse
+from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
 logger = logging.getLogger("whatsapp_app")
 
-# --- PLACEHOLDER FOR LOAN CALCULATION LOGIC ---
-async def loan_calc(data: dict):
+def calculate_max_loan_principal(repayment_capacity: float, duration_months: int, annual_rate_percent: float) -> float:
     """
-    Handles the initiation of the loan calculation process. 
-    This is where the bot would ask for the required parameters (repayment amount, duration, rate).
+    Calculates the maximum loan amount based on repayment ability, duration, and interest rate.
     """
-    from_number_full = str(data.get("From") or "")
-    
-    # Standardize number to E.164 format (Meta prefers +<CountryCode><Number>)
-    if from_number_full and not from_number_full.startswith("+"):
-        # We assume the number is a complete international number but just missing the '+' prefix.
-        from_number_full = "+" + from_number_full
+    if annual_rate_percent == 0:
+        return repayment_capacity * duration_months
 
-    # MESSAGE TRANSLATED TO SWAHILI
-    message = (
-        "✍️ *Kikokotoo cha Mkopo*:\n"
-        "Tafadhali tuma maelezo yako ya kikokotoo katika muundo huu ili kufanya ukokotozi:\n"
-        "*Kiasi: [uwezo wa kulipa], Muda: [miezi], Riba: [asilimia ya mwaka]*\n\n"
-        "Mfano: *Kiasi: 200000, Muda: 12, Riba: 18*"
+    monthly_rate = (annual_rate_percent / 100) / 12
+    try:
+        numerator = 1 - math.pow(1 + monthly_rate, -duration_months)
+        principal = repayment_capacity * (numerator / monthly_rate)
+        return round(principal, 2)
+    except Exception as e:
+        logger.error(f"Error in loan calculation: {e}")
+        return 0.0
+
+
+def send_whatsapp_flow_nakopesheka(to_number: str):
+    """
+    Sends the 'Nakopesheka' Flow (Eligibility Form) to the user.
+    """
+    logger.info(f"🚀 Sending Nakopesheka Flow to {to_number}")
+    return send_meta_whatsapp_flow(
+        to=to_number,
+        flow_id="760682547026386",  # 👈 Flow ID from Meta (Nakopesheka)
+        screen="ELIGIBILITY_SCREEN",
+        cta_text="ANZA NAKOPESHEKA"
     )
-    send_meta_whatsapp_message(to=from_number_full, body=message)
-    logger.info(f"Loan calculator prompt sent to {from_number_full}")
+
+
+def send_whatsapp_flow_calc(to_number: str):
+    """
+    Sends the 'Loan Calculator' Flow to the user.
+    """
+    logger.info(f"📊 Sending Loan Calculator Flow to {to_number}")
+    return send_meta_whatsapp_flow(
+        to=to_number,
+        flow_id="1623606141936116",  # 👈 Flow ID from Meta (Kikokotoo)
+        screen="LOAN_CALCULATOR",
+        cta_text="JAZA KIKOKOTOI"
+    )
+# =====================================================
+async def process_loan_calculator(from_number: str, form_data: dict):
+    """
+    Handles submission from the 'Loan Calculator' Flow.
+    Performs loan computation and sends back estimated loan amount.
+    """
+    try:
+        # Extract values from form data
+        repayment_capacity = float(form_data.get("RepaymentAmount", 200000))
+        duration_months = int(form_data.get("DurationMonths", 12))
+        annual_rate_percent = float(form_data.get("AnnualRate", 18))
+
+        # Compute max loan
+        max_loan_amount = calculate_max_loan_principal(
+            repayment_capacity, duration_months, annual_rate_percent
+        )
+
+        # Prepare result message
+        message = (
+            "📊 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
+            f"➡️ Uwezo wa kulipa (kila mwezi): *Tsh {repayment_capacity:,.0f}*\n"
+            f"➡️ Muda wa Mkopo: *{duration_months} miezi*\n"
+            f"➡️ Riba ya mwaka: *{annual_rate_percent}%*\n\n"
+            f"💰 *Kiasi cha juu cha mkopo kinachokadiriwa:* Tsh {max_loan_amount:,.0f}"
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Error processing loan calculator flow: {e}")
+        message = "⚠️ Samahani, hitilafu imetokea wakati wa kuchakata kikokotoo."
+
+    # Send result to user
+    send_meta_whatsapp_message(to=from_number, body=message)
+    logger.info(f"✅ Loan Calculator result sent to {from_number}")
     return PlainTextResponse("OK")
 
-# --- WHATSAPP MENU DATA (Translated to Swahili) ---
+
+async def process_nakopesheka_flow(from_number: str, form_data: dict):
+    try:
+        # Extract user's name (or fallback to number)
+        user_name = form_data.get("FullName") or from_number
+
+        # Respond asking for documents
+        response_text = (
+            f"✅ Asante, {user_name}! \n"
+            "Tafadhali tuma PDF au picha zinazohusiana na taarifa zako za kifedha "
+            "ili tuchambue Manka API. Utapokea majibu baada ya uchambuzi."
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Error in Nakopesheka flow prep: {e}")
+        response_text = (
+            "⚠️ Samahani, hitilafu imetokea wakati wa kuchakata taarifa zako. "
+            "Tafadhali jaribu tena."
+        )
+
+    # Send prompt to user
+    send_meta_whatsapp_message(to=from_number, body=response_text)
+    logger.info(f"📩 Nakopesheka prompt sent to {from_number}")
+    return PlainTextResponse("OK")
+
 main_menu = {
     "1": {
-        "title": "Jifunze kuhusu Alama ya Mikopo (Credit Scoring)",
+        "title": "Alama ya Mikopo (Credit Scoring)",
         "description": (
-            "Hii ni kipimo kinachoonyesha **uaminifu wako wa kifedha** na historia yako ya ulipaji wa mikopo ya zamani. "
-            "Alama nzuri ni *muhimu sana* kwa sababu inakupa fursa ya kupata **mikopo haraka zaidi**, kwa **viwango vya riba vya chini**, "
-            "na kwa **kiasi kikubwa zaidi** kutoka taasisi za kifedha. Kudumisha alama nzuri kunahitaji ulipaji wa deni kwa wakati "
-            "na kutotumia zaidi ya kikomo chako cha mkopo."
+            "Alama ya Mikopo inaonyesha uaminifu wako wa kifedha. "
+            "Alama nzuri hukusaidia kupata mikopo kwa urahisi zaidi."
         )
     },
     "2": {
         "title": "Upana wa Mikopo (Credit Bandwidth)",
-        "description": (
-            "Upana wa Mikopo unaonyesha **kiasi cha juu zaidi** cha mkopo ambacho taasisi za kifedha zinaweza kukupa. "
-            "Kiasi hiki huhesabiwa kwa kuchambua *mapato yako*, *madeni yako ya sasa*, na *historia yako ya ulipaji*. "
-            "Upana mkubwa wa mikopo hukupa uwezo wa kujadiliana vizuri na kuchukua mikopo mikubwa zaidi kwa ajili ya uwekezaji au miradi mikubwa."
-        )
+        "description": "Inaonyesha kiwango cha juu cha mkopo unachoweza kukopa kulingana na kipato chako."
     },
     "3": {
-        "title": "Nakopesheka!!",
-        "description": (
-            "🔥 **Tuma Taarifa Zako za Kifedha:**\n"
-            "Ili kuanza mchakato wa *Nakopesheka*, tafadhali **ambatanisha** faili ya PDF au picha iliyo na *taarifa zako za miamala/malipo* (Taarifa ya Benki/Taarifa za M-Pesa) kwa **angalau miezi mitatu (3)**. \n\n"
-            "Mfumo wetu utaichambua kiotomatiki na kukupa jibu."
-        )
+        "title": "Nakopesheka!! (Fomu ya Uhalali)",
+        "description": "Bonyeza kitufe kujaza taarifa zako ili tuangalie kama unastahili mkopo."
     },
     "4": {
-        "title": "Kikokotoo cha Mkopo",
-        "description": (
-            "Tumia kikokotoo chetu cha mkopo kujua kiasi gani cha mkopo unachostahili kulingana na uwezo wako wa kulipa kila mwezi, muda wa mkopo, na kiwango cha riba.\n"
-            "Tuma neno *CALC* ili kuanza mchakato wa kuingiza vigezo vya kikokotoo."
-        )
+        "title": "Kikokotoo cha Mkopo (Loan Calculator)",
+        "description": "Tumia kikokotoo kujua kiwango cha mkopo kinachokufaa kulingana na mapato yako."
     },
     "5": {
         "title": "Aina za Mikopo",
-        "description": (
-            "Mikopo huwekwa katika makundi kulingana na **Dhamana/Madhumuni** na **Aina ya Kiwango cha Riba**.\n"
-            "   * **Mikopo kulingana na Madhumuni/Dhamana:** Hii ni pamoja na **Mkopo wa Nyumba** (muda mrefu, riba ya chini), "
-            "**Mkopo wa Biashara** (kwa upanuzi wa biashara), **Mkopo wa Elimu** (kwa masomo), na **Mkopo wa Haraka/Simu ya Mkononi** (kwa mahitaji ya ghafla, muda mfupi).\n"
-            "   * **Mikopo kulingana na Aina ya Kiwango cha Riba:** Hii ni pamoja na **Kiwango Kisichobadilika** (riba haibadilika katika muda wote), "
-            "**Kiwango Kinachobadilika** (riba inayobadilika kulingana na soko), n.k. Kuelewa aina hizi hukusaidia kuchagua mkopo unaofaa zaidi."
-        )
+        "description": "Kuna mikopo ya biashara, elimu, nyumba, na mikopo ya dharura."
     },
     "6": {
         "title": "Huduma za Nilipo (Where I Am)",
-        "description": (
-            "Huduma zinazotolewa kwa sasa ni pamoja na: manunuzi madogo, malipo ya kidijitali, gharama za dharura, mikopo ya muda mfupi."
-        )
+        "description": "Huduma za karibu nawe: mikopo midogo, malipo, na mikopo ya haraka."
     }
 }
 
 
-# --- MAIN WHATSAPP MENU HANDLER ---
 async def whatsapp_menu(data: dict):
+    """
+    Main menu and text-based WhatsApp command handler.
+    """
     try:
         from_number_full = str(data.get("From") or "")
-        
-        # ⚠️ CRITICAL FIX: Standardize number to E.164 format (Meta requires +<CountryCode><Number>)
         if from_number_full and not from_number_full.startswith("+"):
             from_number_full = "+" + from_number_full
-            
-        if not from_number_full or from_number_full == "+": # Check for empty or just "+"
-            logger.warning("Missing 'From' number in request after standardization.")
-            return PlainTextResponse("OK")
 
-        incoming_msg = str(data.get("Body") or "").strip()
-        incoming_msg_lower = incoming_msg.lower()
+        incoming_msg = str(data.get("Body") or "").strip().lower()
 
-        # --- Show main menu (SWAHILI TRANSLATION) ---
-        if incoming_msg_lower in ["hi", "hello", "start", "menu","main menu", "yo","good morning","good evening","anza","good afternoon","habari","mambo"]:
-            reply_text = (
-                " *Karibu kwenye Huduma za Mikopo za Manka*\n"
-                " Chagua huduma unayopenda kuhudumiwa:\n\n"
-                "1️⃣ Jifunze kuhusu Alama ya Mikopo\n"
+        # 👋 Main Menu
+        if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
+            reply = (
+                "👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\n"
+                "Chagua huduma kwa kutuma namba:\n\n"
+                "1️⃣ Alama ya Mikopo\n"
                 "2️⃣ Upana wa Mikopo\n"
-                "3️⃣ Nakopesheka!!\n"
+                "3️⃣ Nakopesheka!! (Fomu)\n"
                 "4️⃣ Kikokotoo cha Mkopo\n"
                 "5️⃣ Aina za Mikopo\n"
-                "6️⃣ Huduma zinazotolewa kwa Mikopo"
+                "6️⃣ Huduma Nilipo"
             )
-            send_meta_whatsapp_message(to=from_number_full, body=reply_text)
+            send_meta_whatsapp_message(to=from_number_full, body=reply)
             return PlainTextResponse("OK")
 
-        # --- Handle specific commands/selections ---
-        
-        # Option 4 Direct Trigger Command
-        if incoming_msg_lower == "calc":
-            return await loan_calc(data)
+        # 🔢 Menu Selections
+        if incoming_msg in main_menu:
+            selection = incoming_msg
 
-        # Handle menu selection 
-        elif incoming_msg_lower in main_menu:
-            selection = incoming_msg_lower
-            
-            # 3. Nakopesheka!! (Instruct user to send file/media upload)
             if selection == "3":
-                item = main_menu[selection]
-                reply_text = f"*{item['title']}*\n\n{item['description']}"
-                send_meta_whatsapp_message(to=from_number_full, body=reply_text)
-                return PlainTextResponse("OK")
-                
-            # 4. Loan Calculator (Call the loan calculation initiation function)
-            elif selection == "4":
-                return await loan_calc(data)
+                return send_whatsapp_flow_nakopesheka(from_number_full)
 
-            # All other menu options (1, 2, 5, 6) just send the description
+            elif selection == "4":
+                return send_whatsapp_flow_calc(from_number_full)
+
             else:
                 item = main_menu[selection]
-                reply_text = f"*{item['title']}*\n{item['description']}"
-                send_meta_whatsapp_message(to=from_number_full, body=reply_text)
+                message = f"*{item['title']}*\n{item['description']}"
+                send_meta_whatsapp_message(to=from_number_full, body=message)
                 return PlainTextResponse("OK")
 
-        # --- Fallback (SWAHILI TRANSLATION) ---
-        send_meta_whatsapp_message(to=from_number_full, body="Samahani, sielewi. Jibu kwa 'menu' au 'anza' ili kuona huduma zetu.")
+        # ⚠️ Unknown Command
+        send_meta_whatsapp_message(
+            to=from_number_full,
+            body="⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena."
+        )
         return PlainTextResponse("OK")
 
     except Exception as e:
         logger.exception(f"Error in whatsapp_menu: {e}")
-
-        try:
-            # Safely send a user-friendly error message if sender info is available (SWAHILI TRANSLATION)
-            from_number_safe = locals().get("from_number_full", None)
-            if from_number_safe:
-                send_meta_whatsapp_message(
-                    to=from_number_safe,
-                    body="❌ Samahani, hitilafu ya kiufundi imetokea. Tafadhali jaribu tena au tuma 'menu'."
-                )
-        except Exception as inner_error:
-            logger.warning(f"⚠️ Failed to send error message: {inner_error}")
-            pass  # Suppress further errors
-
-        return PlainTextResponse("Internal Server Error", status_code=500)
+        send_meta_whatsapp_message(
+            to=data.get("From"),
+            body="❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'."
+        )
+        return PlainTextResponse("Internal Error", status_code=500)

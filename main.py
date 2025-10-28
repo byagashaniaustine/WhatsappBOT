@@ -3,18 +3,23 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from typing import Dict, Any
+
+# --- Existing Imports ---
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message, get_media_url 
+from services.meta import send_meta_whatsapp_message, get_media_url
+
+# --- New Handlers for Loan and Nakopesheka Flows ---
+from api.whatsappBOT import process_loan_calculator, process_nakopesheka_flow
 
 logger = logging.getLogger("whatsapp_app")
 app = FastAPI()
 
-# --- Configuration for Webhook Verification ---
+# --- CONFIG ---
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "YOUR_SECRET_TOKEN_HERE")
 
 
-# --- 1. WEBHOOK VERIFICATION (GET) ENDPOINT ---
+# --- 1️⃣ WEBHOOK VERIFICATION ---
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     try:
@@ -22,136 +27,88 @@ async def verify_webhook(request: Request):
         token = request.query_params.get("hub.verify_token")
         challenge = request.query_params.get("hub.challenge")
 
-        if mode and token:
-            if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-                logger.info("✅ Webhook verified successfully!")
-                return PlainTextResponse(challenge)
-            else:
-                logger.warning("⚠️ Webhook verification failed: Token mismatch or incorrect mode.")
-                raise HTTPException(status_code=403, detail="Verification failed: Token mismatch or incorrect mode.")
-        
-        logger.warning("⚠️ Webhook verification failed: Missing required parameters.")
-        raise HTTPException(status_code=400, detail="Missing required parameters for verification.")
+        if mode and token and mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+            logger.info("✅ Webhook verified successfully!")
+            return PlainTextResponse(challenge)
+
+        logger.warning("⚠️ Webhook verification failed.")
+        raise HTTPException(status_code=403, detail="Verification failed.")
 
     except Exception as e:
         logger.error(f"❌ Error during webhook verification: {e}")
-        raise HTTPException(status_code=403, detail="Verification request processing error.")
+        raise HTTPException(status_code=403, detail="Webhook verification error.")
 
 
-# --- 2. INCOMING MESSAGE (POST) ENDPOINT (UPDATED FOR META JSON) ---
+# --- 2️⃣ INCOMING MESSAGE HANDLER ---
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
     try:
-        # Meta sends a JSON payload in the body, not form data
         meta_payload = await request.json()
-        
-        # We need to traverse the nested Meta JSON structure
         entry = meta_payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
-        
-        # Check if this is a message notification
-        if value.get("messaging_product") != "whatsapp":
-            logger.info("Ignoring non-whatsapp notification.")
-            return PlainTextResponse("OK")
-
         messages = value.get("messages", [])
-        
+
         if not messages:
-            # Handle status updates, contacts, etc.
-            logger.info("Ignoring non-message payload (e.g., status update, read receipt).")
+            logger.info("No message content — ignoring.")
             return PlainTextResponse("OK")
 
-        # Process the first message in the list
         message = messages[0]
-        from_number = message.get("from") # The sender's phone number
-        message_type = message.get("type") # e.g., 'text', 'image', 'document'
-        
+        from_number = message.get("from")
+        message_type = message.get("type")
+
         if not from_number:
-            logger.warning("⚠️ Missing 'from' number in Meta message payload.")
             return PlainTextResponse("OK")
 
-        # --- Standardize Payload for existing BOT functions ---
-        # We create a simple payload dictionary that might be expected by your existing modules
-        standard_payload: Dict[str, Any] = {
-            "From": from_number, # Mapping to the old 'From' for compatibility
-            "Body": message.get("text", {}).get("body", ""),
-            "MediaUrl0": None,
-            "NumMedia": 0,
-        }
-
-        # --- Handle Different Message Types (Text, Media) ---
+        # 🟢 TEXT — regular conversation
         if message_type == "text":
             text_body = message.get("text", {}).get("body", "")
-            standard_payload["Body"] = text_body
-            
-            logger.info(f"💬 Text message detected from {from_number}. Passing to menu handler.")
-            # Pass the full, raw Meta payload for full context if needed by whatsapp_menu
-            await whatsapp_menu(standard_payload)
-            
+            payload = {"From": from_number, "Body": text_body}
+            logger.info(f"💬 Text message from {from_number}: {text_body}")
+            await whatsapp_menu(payload)
+
+        # 🟣 MEDIA — PDF / Image Uploads
         elif message_type in ["image", "document", "audio", "video"]:
-            # --- Handle Media Content ---
             media_data = message.get(message_type, {})
             media_id = media_data.get("id")
             mime_type = media_data.get("mime_type")
-            
-            if media_id and mime_type:
-                # 1. Use the new function to convert the ID into the actual authenticated download URL.
-                try:
-                    # CRITICAL FIX: Call the new function here to get the real URL
-                    actual_media_url = get_media_url(media_id) 
-                except Exception as api_error:
-                    # Log the specific failure and send a user-friendly error message
-                    logger.error(f"❌ Failed to retrieve media URL for ID {media_id}: {api_error}")
-                    send_meta_whatsapp_message(
-                        from_number,
-                        "❌ Samahani, nimeshindwa kupata kiungo cha faili ulilotuma. Tafadhali jaribu tena."
-                    )
-                    return PlainTextResponse("OK")
 
-                
-                standard_payload["NumMedia"] = 1
-                
-                logger.info(f"📁 Media content detected from {from_number}. Type: {message_type}")
-                
-                # 2. Pass the corrected URL to the file processor.
-                result = process_file_upload(
-                    user_id=from_number, 
-                    user_name="",
-                    user_phone=from_number,
-                    flow_type="whatsapp_upload",
-                    media_url=actual_media_url,# <-- NOW PASSING THE CORRECT URL
-                    mime_type=mime_type
-                )
-                logger.info(f"File analysis and storage result: {result}")
-            else:
-                send_meta_whatsapp_message(
-                    from_number,
-                    "❌ Samahani, nimeshindwa kupata kiungo au aina ya faili ulilotuma."
-                )
+            if not media_id:
+                send_meta_whatsapp_message(from_number, "Samahani, faili halikupatikana.")
+                return PlainTextResponse("OK")
 
-        else:
-            # Handle unsupported message types (e.g., sticker, location)
-            send_meta_whatsapp_message(
-                from_number,
-                f"Samahani, sijui jinsi ya kushughulikia ujumbe wa aina ya '{message_type}'."
+            actual_media_url = get_media_url(media_id)
+            result = process_file_upload(
+                user_id=from_number,
+                user_name="",
+                user_phone=from_number,
+                flow_type="whatsapp_upload",
+                media_url=actual_media_url,
+                mime_type=mime_type
             )
-            
+
+            logger.info(f"📎 File processed for {from_number}: {result}")
+            send_meta_whatsapp_message(from_number, "✅ Faili lako limepokelewa, linafanyiwa uchambuzi.")
+
+        # 🟡 FLOW SUBMISSION (Loan Calculator or Nakopesheka)
+        elif message_type == "interactive" and message["interactive"].get("type") == "flow_reply":
+            flow_id = message["interactive"].get("flow_id")
+            form_data = message["interactive"]["response"].get("form_data", {})
+
+            logger.info(f"🧾 Flow submission from {from_number} (Flow ID: {flow_id}) — Data: {form_data}")
+
+            # Distinguish which flow this is
+            if flow_id == "760682547026386":  # 👈 your Loan Calculator Flow ID
+                await process_loan_calculator(from_number, form_data)
+            else:
+                await process_nakopesheka_flow(from_number, form_data)
+
+        # ❌ UNKNOWN MESSAGE TYPE
+        else:
+            send_meta_whatsapp_message(from_number, f"Haiwezi kushughulikia ujumbe wa aina '{message_type}'.")
+
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"❌ Error handling WhatsApp webhook: {e}")
-
-        # Attempt to send a generic error back to the user
-        try:
-            from_number_safe = locals().get("from_number", None)
-            if from_number_safe:
-                send_meta_whatsapp_message(
-                    from_number_safe,
-                    "❌ Samahani, kuna tatizo la kiufundi limetokea. Tafadhali jaribu tena."
-                )
-        except Exception as inner_error:
-            logger.warning(f"⚠️ Failed to send error message to user via Meta API service: {inner_error}")
-            pass
-
+        logger.exception(f"❌ WhatsApp webhook error: {e}")
         return PlainTextResponse("Internal Server Error", status_code=500)
