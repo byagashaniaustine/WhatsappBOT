@@ -4,106 +4,87 @@ from fastapi.responses import PlainTextResponse
 from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
 logger = logging.getLogger("whatsapp_app")
+def send_whatsapp_flow_calc(to_number: str):
+    """Tuma Flow ya Kikokotoo cha Mkopo"""
+    logger.info(f"📊 Sending Loan Calculator FLOW to {to_number}")
+    return send_meta_whatsapp_flow(
+        to=to_number,
+        flow_id="1623606141936116",  # Kikokotoo Flow ID
+        screen="ELIGIBILITY_CHECK",
+        cta_text="Angalia kiwango chako cha mkopo"  # matches Footer label
+    )
+
+def send_whatsapp_flow_nakopesheka(to_number: str):
+    """Tuma Flow ya Nakopesheka"""
+    logger.info(f"🚀 Sending Nakopesheka FLOW to {to_number}")
+    return send_meta_whatsapp_flow(
+        to=to_number,
+        flow_id="760682547026386",  # Nakopesheka Flow ID
+        screen="LOAN_APPLICATION",
+        cta_text="Anza Fomu ya Mkopo"
+    )
 
 def calculate_max_loan_principal(repayment_capacity: float, duration_months: int, annual_rate_percent: float) -> float:
-    """
-    Calculates the maximum loan amount based on repayment ability, duration, and interest rate.
-    """
+    """Hesabu kiasi cha juu cha mkopo kulingana na uwezo wa kulipa, muda, na riba."""
     if annual_rate_percent == 0:
         return repayment_capacity * duration_months
 
-    monthly_rate = (annual_rate_percent / 100) / 12
+    periodic_rate = (annual_rate_percent / 100) / 12
     try:
-        numerator = 1 - math.pow(1 + monthly_rate, -duration_months)
-        principal = repayment_capacity * (numerator / monthly_rate)
-        return round(principal, 2)
-    except Exception as e:
-        logger.error(f"Error in loan calculation: {e}")
+        numerator = 1 - math.pow(1 + periodic_rate, -duration_months)
+        principal = repayment_capacity * (numerator / periodic_rate)
+        return principal
+    except Exception:
         return 0.0
 
-
-def send_whatsapp_flow_nakopesheka(to_number: str):
-    """
-    Sends the 'Nakopesheka' Flow (Eligibility Form) to the user.
-    """
-    logger.info(f"🚀 Sending Nakopesheka Flow to {to_number}")
-    return send_meta_whatsapp_flow(
-        to=to_number,
-        flow_id="760682547026386",  # 👈 Flow ID from Meta (Nakopesheka)
-        screen="ELIGIBILITY_SCREEN",
-        cta_text="ANZA NAKOPESHEKA"
-    )
-
-
-def send_whatsapp_flow_calc(to_number: str):
-    """
-    Sends the 'Loan Calculator' Flow to the user.
-    """
-    logger.info(f"📊 Sending Loan Calculator Flow to {to_number}")
-    return send_meta_whatsapp_flow(
-        to=to_number,
-        flow_id="1623606141936116",  # 👈 Flow ID from Meta (Kikokotoo)
-        screen="LOAN_CALCULATOR",
-        cta_text="JAZA KIKOKOTOI"
-    )
-# =====================================================
 async def process_loan_calculator(from_number: str, form_data: dict):
-    """
-    Handles submission from the 'Loan Calculator' Flow.
-    Performs loan computation and sends back estimated loan amount.
-    """
-    try:
-        # Extract values from form data
-        repayment_capacity = float(form_data.get("RepaymentAmount", 200000))
-        duration_months = int(form_data.get("DurationMonths", 12))
-        annual_rate_percent = float(form_data.get("AnnualRate", 18))
+    if not from_number.startswith("+"):
+        from_number = "+" + from_number
 
-        # Compute max loan
-        max_loan_amount = calculate_max_loan_principal(
+    try:
+        # ⚡ Read keys exactly as sent from Flow JSON
+        repayment_capacity = float(form_data.get("kipato_mwezi", 0))
+        duration_months = int(form_data.get("muda_miezi", 0))
+        annual_rate_percent = float(form_data.get("riba_mwaka", 0))
+
+        max_loan = calculate_max_loan_principal(
             repayment_capacity, duration_months, annual_rate_percent
         )
 
-        # Prepare result message
         message = (
-            "📊 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
-            f"➡️ Uwezo wa kulipa (kila mwezi): *Tsh {repayment_capacity:,.0f}*\n"
+            "✅ *Matokeo ya Kikokotoo cha Mkopo*\n\n"
+            f"➡️ Uwezo wa kulipa (PMT): *Tsh {repayment_capacity:,.0f}*\n"
             f"➡️ Muda wa Mkopo: *{duration_months} miezi*\n"
             f"➡️ Riba ya mwaka: *{annual_rate_percent}%*\n\n"
-            f"💰 *Kiasi cha juu cha mkopo kinachokadiriwa:* Tsh {max_loan_amount:,.0f}"
+            f"Kiasi cha juu cha mkopo kinachokadiriwa ni:\n"
+            f"💰 *Tsh {max_loan:,.0f}*"
         )
 
     except Exception as e:
-        logger.error(f"❌ Error processing loan calculator flow: {e}")
-        message = "⚠️ Samahani, hitilafu imetokea wakati wa kuchakata kikokotoo."
+        logger.error(f"❌ Error processing loan calculator: {e}")
+        message = "❌ Samahani, kuna hitilafu katika kuchakata data. Tafadhali jaribu tena."
 
-    # Send result to user
     send_meta_whatsapp_message(to=from_number, body=message)
-    logger.info(f"✅ Loan Calculator result sent to {from_number}")
+    logger.info(f"📩 Loan result sent to {from_number}")
     return PlainTextResponse("OK")
 
-
 async def process_nakopesheka_flow(from_number: str, form_data: dict):
-    try:
-        # Extract user's name (or fallback to number)
-        user_name = form_data.get("FullName") or from_number
+    """
+    Backend receives flow submission from Nakopesheka.
+    We just confirm the user's name and ask them to upload ID/document.
+    """
+    if not from_number.startswith("+"):
+        from_number = "+" + from_number
 
-        # Respond asking for documents
-        response_text = (
-            f"✅ Asante, {user_name}! \n"
-            "Tafadhali tuma PDF au picha zinazohusiana na taarifa zako za kifedha "
-            "ili tuchambue Manka API. Utapokea majibu baada ya uchambuzi."
-        )
+    full_name = form_data.get("full_name", "Mteja")
+    message = (
+        f"✅ Habari {full_name}!\n\n"
+        "Tafadhali tuma PDF au picha za nyaraka zako (ID, salary slip, n.k.) "
+        "ili tufanye uchambuzi na kuendelea na ombi lako la mkopo."
+    )
 
-    except Exception as e:
-        logger.error(f"❌ Error in Nakopesheka flow prep: {e}")
-        response_text = (
-            "⚠️ Samahani, hitilafu imetokea wakati wa kuchakata taarifa zako. "
-            "Tafadhali jaribu tena."
-        )
-
-    # Send prompt to user
-    send_meta_whatsapp_message(to=from_number, body=response_text)
-    logger.info(f"📩 Nakopesheka prompt sent to {from_number}")
+    send_meta_whatsapp_message(to=from_number, body=message)
+    logger.info(f"📩 Nakopesheka instruction sent to {from_number}")
     return PlainTextResponse("OK")
 
 main_menu = {
