@@ -9,7 +9,7 @@ from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
 # --- Flow Handlers ---
-from api.whatsappBOT import process_loan_calculator, process_nakopesheka_flow
+from api.whatsappBOT import process_loan_calculator_flow, process_nakopesheka_flow
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
@@ -109,7 +109,7 @@ async def whatsapp_webhook(request: Request):
 
             # Distinguish which flow
             if flow_id == "1623606141936116":  # Loan Calculator Flow ID
-                await process_loan_calculator(from_number, form_data)
+                await process_loan_calculator_flow(from_number, form_data)
             elif flow_id == "760682547026386":  # Nakopesheka Flow ID
                 await process_nakopesheka_flow(from_number, form_data)
             else:
