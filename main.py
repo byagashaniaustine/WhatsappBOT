@@ -2,24 +2,25 @@ import logging
 import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
-from typing import Dict, Any
 
 # --- Existing Imports ---
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
-# --- New Handlers for Loan and Nakopesheka Flows ---
+# --- Flow Handlers ---
 from api.whatsappBOT import process_loan_calculator, process_nakopesheka_flow
 
 logger = logging.getLogger("whatsapp_app")
+logger.setLevel(logging.INFO)
 app = FastAPI()
 
 # --- CONFIG ---
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "YOUR_SECRET_TOKEN_HERE")
 
-
-# --- 1️⃣ WEBHOOK VERIFICATION ---
+# ------------------------------
+# 1️⃣ WEBHOOK VERIFICATION
+# ------------------------------
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     try:
@@ -27,7 +28,7 @@ async def verify_webhook(request: Request):
         token = request.query_params.get("hub.verify_token")
         challenge = request.query_params.get("hub.challenge")
 
-        if mode and token and mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+        if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
             logger.info("✅ Webhook verified successfully!")
             return PlainTextResponse(challenge)
 
@@ -39,12 +40,14 @@ async def verify_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Webhook verification error.")
 
 
-# --- 2️⃣ INCOMING MESSAGE HANDLER ---
+# ------------------------------
+# 2️⃣ INCOMING MESSAGE HANDLER
+# ------------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request):
     try:
-        meta_payload = await request.json()
-        entry = meta_payload.get("entry", [{}])[0]
+        payload = await request.json()
+        entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
@@ -60,14 +63,18 @@ async def whatsapp_webhook(request: Request):
         if not from_number:
             return PlainTextResponse("OK")
 
-        # 🟢 TEXT — regular conversation
+        # ------------------------------
+        # 🟢 TEXT MESSAGE
+        # ------------------------------
         if message_type == "text":
             text_body = message.get("text", {}).get("body", "")
             payload = {"From": from_number, "Body": text_body}
             logger.info(f"💬 Text message from {from_number}: {text_body}")
             await whatsapp_menu(payload)
 
-        # 🟣 MEDIA — PDF / Image Uploads
+        # ------------------------------
+        # 🟣 MEDIA UPLOAD
+        # ------------------------------
         elif message_type in ["image", "document", "audio", "video"]:
             media_data = message.get(message_type, {})
             media_id = media_data.get("id")
@@ -90,22 +97,32 @@ async def whatsapp_webhook(request: Request):
             logger.info(f"📎 File processed for {from_number}: {result}")
             send_meta_whatsapp_message(from_number, "✅ Faili lako limepokelewa, linafanyiwa uchambuzi.")
 
-        # 🟡 FLOW SUBMISSION (Loan Calculator or Nakopesheka)
-        elif message_type == "interactive" and message["interactive"].get("type") == "flow_reply":
-            flow_id = message["interactive"].get("flow_id")
-            form_data = message["interactive"]["response"].get("form_data", {})
+        # ------------------------------
+        # 🟡 FLOW SUBMISSION (Loan/Nakopesheka)
+        # ------------------------------
+        elif message_type == "interactive" and message.get("interactive", {}).get("type") == "flow_reply":
+            interactive_data = message["interactive"]
+            flow_id = interactive_data.get("flow_id")
+            form_data = interactive_data.get("response", {}).get("form_data", {})
 
             logger.info(f"🧾 Flow submission from {from_number} (Flow ID: {flow_id}) — Data: {form_data}")
 
-            # Distinguish which flow this is
-            if flow_id == "760682547026386":  # 👈 your Loan Calculator Flow ID
+            # Distinguish which flow
+            if flow_id == "1623606141936116":  # Loan Calculator Flow ID
                 await process_loan_calculator(from_number, form_data)
-            else:
+            elif flow_id == "760682547026386":  # Nakopesheka Flow ID
                 await process_nakopesheka_flow(from_number, form_data)
+            else:
+                send_meta_whatsapp_message(from_number, "⚠️ Flow is not recognized.")
 
+        # ------------------------------
         # ❌ UNKNOWN MESSAGE TYPE
+        # ------------------------------
         else:
-            send_meta_whatsapp_message(from_number, f"Haiwezi kushughulikia ujumbe wa aina '{message_type}'.")
+            send_meta_whatsapp_message(
+                from_number,
+                f"Haiwezi kushughulikia ujumbe wa aina '{message_type}'."
+            )
 
         return PlainTextResponse("OK")
 
