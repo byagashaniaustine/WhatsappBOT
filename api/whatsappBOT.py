@@ -18,65 +18,65 @@ async def loan_calc(data: dict):
         # We assume the number is a complete international number but just missing the '+' prefix.
         from_number_full = "+" + from_number_full
 
-    # Message instructing the user how to provide the input parameters
+    # MESSAGE TRANSLATED TO SWAHILI
     message = (
-        "✍️ *Loan Calculator*:\n"
-        "Please submit your calculator details in this format to perform the calculation:\n"
-        "*Amount: [repayment capacity], Duration: [months], Rate: [annual percentage]*\n\n"
-        "Example: *Amount: 200000, Duration: 12, Rate: 18*"
+        "✍️ *Kikokotoo cha Mkopo*:\n"
+        "Tafadhali tuma maelezo yako ya kikokotoo katika muundo huu ili kufanya ukokotozi:\n"
+        "*Kiasi: [uwezo wa kulipa], Muda: [miezi], Riba: [asilimia ya mwaka]*\n\n"
+        "Mfano: *Kiasi: 200000, Muda: 12, Riba: 18*"
     )
     send_meta_whatsapp_message(to=from_number_full, body=message)
     logger.info(f"Loan calculator prompt sent to {from_number_full}")
     return PlainTextResponse("OK")
 
-# --- WHATSAPP MENU DATA (Updated) ---
+# --- WHATSAPP MENU DATA (Translated to Swahili) ---
 main_menu = {
     "1": {
-        "title": "Learn about Credit Scoring",
+        "title": "Jifunze kuhusu Alama ya Mikopo (Credit Scoring)",
         "description": (
-            "This is a metric that shows your **financial trustworthiness** and your history of past loan repayments. "
-            "A good score is *critical* because it gives you the opportunity to get **loans faster**, at **lower interest rates**, "
-            "and at **higher amounts** from financial institutions. Maintaining a good score requires timely debt repayment "
-            "and not using more than your credit limit."
+            "Hii ni kipimo kinachoonyesha **uaminifu wako wa kifedha** na historia yako ya ulipaji wa mikopo ya zamani. "
+            "Alama nzuri ni *muhimu sana* kwa sababu inakupa fursa ya kupata **mikopo haraka zaidi**, kwa **viwango vya riba vya chini**, "
+            "na kwa **kiasi kikubwa zaidi** kutoka taasisi za kifedha. Kudumisha alama nzuri kunahitaji ulipaji wa deni kwa wakati "
+            "na kutotumia zaidi ya kikomo chako cha mkopo."
         )
     },
     "2": {
-        "title": "Credit Bandwidth",
+        "title": "Upana wa Mikopo (Credit Bandwidth)",
         "description": (
-            "Credit Bandwidth indicates the **maximum amount** of credit that financial institutions can extend to you. "
-            "This amount is calculated by analyzing your *income*, your *current debts*, and your *repayment history*. "
-            "A large credit bandwidth gives you the ability to negotiate better and take out larger loans for investments or major projects."
+            "Upana wa Mikopo unaonyesha **kiasi cha juu zaidi** cha mkopo ambacho taasisi za kifedha zinaweza kukupa. "
+            "Kiasi hiki huhesabiwa kwa kuchambua *mapato yako*, *madeni yako ya sasa*, na *historia yako ya ulipaji*. "
+            "Upana mkubwa wa mikopo hukupa uwezo wa kujadiliana vizuri na kuchukua mikopo mikubwa zaidi kwa ajili ya uwekezaji au miradi mikubwa."
         )
     },
     "3": {
-        "title": "Nakopesheka!! (I Am Loanable!!)",
+        "title": "Nakopesheka!!",
         "description": (
-            "🔥 **Submit Your Financial Statements:**\n"
-            "To start the *Nakopesheka* process, please **attach** a PDF file or an image containing your *transaction/payment statements* (Bank Statement/M-Pesa statements) for **at least three (3) months**. \n\n"
-            "Our system will analyze it automatically and give you a response."
+            "🔥 **Tuma Taarifa Zako za Kifedha:**\n"
+            "Ili kuanza mchakato wa *Nakopesheka*, tafadhali **ambatanisha** faili ya PDF au picha iliyo na *taarifa zako za miamala/malipo* (Taarifa ya Benki/Taarifa za M-Pesa) kwa **angalau miezi mitatu (3)**. \n\n"
+            "Mfumo wetu utaichambua kiotomatiki na kukupa jibu."
         )
     },
     "4": {
-        "title": "Loan Calculator (Kikokotoo cha Mkopo)",
+        "title": "Kikokotoo cha Mkopo",
         "description": (
-            "Use our loan calculator to find out how much loan you qualify for based on your monthly repayment capacity, loan duration, and interest rate.\n"
-            "Send the word *CALC* to start the process of entering the calculator parameters."
+            "Tumia kikokotoo chetu cha mkopo kujua kiasi gani cha mkopo unachostahili kulingana na uwezo wako wa kulipa kila mwezi, muda wa mkopo, na kiwango cha riba.\n"
+            "Tuma neno *CALC* ili kuanza mchakato wa kuingiza vigezo vya kikokotoo."
         )
     },
     "5": {
-        "title": "Types of Loans",
+        "title": "Aina za Mikopo",
         "description": (
-            "Loans are categorized based on **Collateral/Purpose** and **Interest Rate Type**.\n"
-            "   * **Loans based on Purpose/Collateral:** These include **Home Loan** (long-term, low interest), "
-            "**Business Loan** (for business expansion), **Education Loan** (for studies), and **Quick/Mobile Loan** (for sudden needs, short term).\n"
-            "   * **Loans based on Interest Rate Type:** These include **Fixed Rate** (interest does not change over the term), "
-            "**Variable Rate** (interest that changes based on the market), etc. Understanding these types helps you choose the most suitable loan."
+            "Mikopo huwekwa katika makundi kulingana na **Dhamana/Madhumuni** na **Aina ya Kiwango cha Riba**.\n"
+            "   * **Mikopo kulingana na Madhumuni/Dhamana:** Hii ni pamoja na **Mkopo wa Nyumba** (muda mrefu, riba ya chini), "
+            "**Mkopo wa Biashara** (kwa upanuzi wa biashara), **Mkopo wa Elimu** (kwa masomo), na **Mkopo wa Haraka/Simu ya Mkononi** (kwa mahitaji ya ghafla, muda mfupi).\n"
+            "   * **Mikopo kulingana na Aina ya Kiwango cha Riba:** Hii ni pamoja na **Kiwango Kisichobadilika** (riba haibadilika katika muda wote), "
+            "**Kiwango Kinachobadilika** (riba inayobadilika kulingana na soko), n.k. Kuelewa aina hizi hukusaidia kuchagua mkopo unaofaa zaidi."
         )
     },
     "6": {
-        "title": "Nilipo Services (Where I Am)",
+        "title": "Huduma za Nilipo (Where I Am)",
         "description": (
-            "Services currently offered include: small purchases, digital payments, emergency expenses, short-term loans."
+            "Huduma zinazotolewa kwa sasa ni pamoja na: manunuzi madogo, malipo ya kidijitali, gharama za dharura, mikopo ya muda mfupi."
         )
     }
 }
@@ -88,12 +88,9 @@ async def whatsapp_menu(data: dict):
         from_number_full = str(data.get("From") or "")
         
         # ⚠️ CRITICAL FIX: Standardize number to E.164 format (Meta requires +<CountryCode><Number>)
-        # This handles raw Meta numbers (255...) by adding the '+' prefix.
         if from_number_full and not from_number_full.startswith("+"):
             from_number_full = "+" + from_number_full
             
-        # Removed the redundant .replace("whatsapp:", "") cleanup
-
         if not from_number_full or from_number_full == "+": # Check for empty or just "+"
             logger.warning("Missing 'From' number in request after standardization.")
             return PlainTextResponse("OK")
@@ -101,17 +98,17 @@ async def whatsapp_menu(data: dict):
         incoming_msg = str(data.get("Body") or "").strip()
         incoming_msg_lower = incoming_msg.lower()
 
-        # --- Show main menu ---
+        # --- Show main menu (SWAHILI TRANSLATION) ---
         if incoming_msg_lower in ["hi", "hello", "start", "menu","main menu", "yo","good morning","good evening","anza","good afternoon","habari","mambo"]:
             reply_text = (
-                " *Welcome to Manka Loan Services*\n"
-                " Choose the service you would like to be served with:\n\n"
-                "1️⃣ Learn about Credit Scoring\n"
-                "2️⃣ Credit Bandwidth\n"
-                "3️⃣ I Am Loanable!!\n"
-                "4️⃣ Loan Calculator\n"
-                "5️⃣ Types of Loans\n"
-                "6️⃣ Services offered for Loans"
+                " *Karibu kwenye Huduma za Mikopo za Manka*\n"
+                " Chagua huduma unayopenda kuhudumiwa:\n\n"
+                "1️⃣ Jifunze kuhusu Alama ya Mikopo\n"
+                "2️⃣ Upana wa Mikopo\n"
+                "3️⃣ Nakopesheka!!\n"
+                "4️⃣ Kikokotoo cha Mkopo\n"
+                "5️⃣ Aina za Mikopo\n"
+                "6️⃣ Huduma zinazotolewa kwa Mikopo"
             )
             send_meta_whatsapp_message(to=from_number_full, body=reply_text)
             return PlainTextResponse("OK")
@@ -135,7 +132,6 @@ async def whatsapp_menu(data: dict):
                 
             # 4. Loan Calculator (Call the loan calculation initiation function)
             elif selection == "4":
-                # Instead of sending the full description, we call loan_calc to initiate the process immediately.
                 return await loan_calc(data)
 
             # All other menu options (1, 2, 5, 6) just send the description
@@ -145,20 +141,20 @@ async def whatsapp_menu(data: dict):
                 send_meta_whatsapp_message(to=from_number_full, body=reply_text)
                 return PlainTextResponse("OK")
 
-        # --- Fallback ---
-        send_meta_whatsapp_message(to=from_number_full, body="Sorry, I don't understand. Reply with 'menu' or 'start' to see our services.")
+        # --- Fallback (SWAHILI TRANSLATION) ---
+        send_meta_whatsapp_message(to=from_number_full, body="Samahani, sielewi. Jibu kwa 'menu' au 'anza' ili kuona huduma zetu.")
         return PlainTextResponse("OK")
 
     except Exception as e:
         logger.exception(f"Error in whatsapp_menu: {e}")
 
         try:
-            # Safely send a user-friendly error message if sender info is available
+            # Safely send a user-friendly error message if sender info is available (SWAHILI TRANSLATION)
             from_number_safe = locals().get("from_number_full", None)
             if from_number_safe:
                 send_meta_whatsapp_message(
                     to=from_number_safe,
-                    body="❌ Sorry, a technical error occurred. Please try again or send 'menu'."
+                    body="❌ Samahani, hitilafu ya kiufundi imetokea. Tafadhali jaribu tena au tuma 'menu'."
                 )
         except Exception as inner_error:
             logger.warning(f"⚠️ Failed to send error message: {inner_error}")
