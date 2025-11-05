@@ -5,12 +5,15 @@ from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
 logger = logging.getLogger("whatsapp_app")
 
-# --- FLOW SCREEN ID CONSTANTS ---
-# These are confirmed correct based on your Flow JSON definitions:
-NAKOPESHEKA_START_SCREEN = "LOAN_APPLICATION" 
-CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK" 
+# ---------------------------------
+# FLOW SCREEN ID CONSTANTS
+# ---------------------------------
+NAKOPESHEKA_START_SCREEN = "LOAN_APPLICATION"
+CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK"
 
-# --- MAIN MENU CONFIG ---
+# ---------------------------------
+# MAIN MENU CONFIGURATION
+# ---------------------------------
 main_menu = {
     "1": {
         "title": "Alama ya Mikopo (Credit Scoring)",
@@ -26,7 +29,6 @@ main_menu = {
     "3": {
         "title": "Nakopesheka!! (Fomu ya Uhalali)",
         "description": "Bonyeza kitufe kujaza taarifa zako ili tuangalie kama unastahili mkopo.",
-        # !!! ACTION REQUIRED: REPLACE THIS with the long DRAFT VERSION ID for Flow 760682547026386
         "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_LOAN_APPLICATION", 
         "flow_cta": "Anza Fomu ya Mkopo",
         "flow_body_text": "Jaza taarifa zako ili kuanza mchakato wa uchambuzi."
@@ -34,7 +36,6 @@ main_menu = {
     "4": {
         "title": "Kikokotoo cha Mkopo (Loan Calculator)",
         "description": "Tumia kikokotoo kujua kiwango cha mkopo kinachokufaa kulingana na mapato yako.",
-        # !!! ACTION REQUIRED: REPLACE THIS with the long DRAFT VERSION ID for Flow 1623606141936116
         "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_CALCULATOR", 
         "flow_cta": "Angalia kiwango chako cha mkopo",
         "flow_body_text": "Jaza mapato yako, muda, na riba ili kupata matokeo."
@@ -50,11 +51,14 @@ main_menu = {
 }
 
 
-# --- LOAN CALCULATOR LOGIC ---
+# ---------------------------------
+# LOAN CALCULATOR HELPER FUNCTION
+# ---------------------------------
 def calculate_max_loan(repayment_capacity: float, duration_months: int, annual_rate_percent: float) -> float:
     """Hesabu kiasi cha juu cha mkopo kulingana na uwezo wa kulipa, muda, na riba."""
     if annual_rate_percent == 0:
         return repayment_capacity * duration_months
+
     periodic_rate = (annual_rate_percent / 100) / 12
     try:
         numerator = 1 - math.pow(1 + periodic_rate, -duration_months)
@@ -64,16 +68,19 @@ def calculate_max_loan(repayment_capacity: float, duration_months: int, annual_r
         return 0.0
 
 
+# ---------------------------------
+# FLOW HANDLERS
+# ---------------------------------
 async def process_loan_calculator_flow(from_number: str, form_data: dict):
     """
-    Process the Loan Calculator Flow submission.
-    Expects: form_data = { "kipato_mwezi": ..., "muda_miezi": ..., "riba_mwaka": ... }
+    Process Loan Calculator Flow submission.
+    form_data example: {"kipato_mwezi": ..., "muda_miezi": ..., "riba_mwaka": ...}
     """
     if not from_number.startswith("+"):
         from_number = "+" + from_number
 
     try:
-        repayment_capacity = float(form_data.get("kipato_mwezi", 0)) 
+        repayment_capacity = float(form_data.get("kipato_mwezi", 0))
         duration_months = int(form_data.get("muda_miezi", 0))
         annual_rate_percent = float(form_data.get("riba_mwaka", 0))
 
@@ -89,24 +96,24 @@ async def process_loan_calculator_flow(from_number: str, form_data: dict):
         )
 
     except Exception as e:
-        logger.error(f"❌ Error processing loan calculator: {e}")
+        logger.error(f"❌ Error processing loan calculator flow: {e}")
         message = "❌ Samahani, kuna hitilafu katika kuchakata data. Tafadhali jaribu tena."
 
     send_meta_whatsapp_message(to=from_number, body=message)
-    logger.info(f"📩 Loan Calculator result sent to {from_number}")
+    logger.info(f"📩 Loan Calculator results sent to {from_number}")
     return PlainTextResponse("OK")
 
 
-# --- NAKOPESHEKA FLOW LOGIC ---
 async def process_nakopesheka_flow(from_number: str, form_data: dict):
     """
     Process Nakopesheka Flow submission.
-    Simply confirm user's name and request PDF/photo documents.
+    Confirms user's name and requests document uploads.
     """
     if not from_number.startswith("+"):
         from_number = "+" + from_number
 
     full_name = form_data.get("full_name", "Mteja")
+
     message = (
         f"✅ Habari {full_name}!\n\n"
         "Tafadhali tuma PDF au picha za nyaraka zako (ID, salary slip, n.k.) "
@@ -118,10 +125,12 @@ async def process_nakopesheka_flow(from_number: str, form_data: dict):
     return PlainTextResponse("OK")
 
 
-# --- WHATSAPP MENU HANDLER ---
+# ---------------------------------
+# MAIN WHATSAPP MENU HANDLER
+# ---------------------------------
 async def whatsapp_menu(data: dict):
     """
-    Handle incoming WhatsApp messages and route to proper menu option.
+    Handle incoming WhatsApp messages and route to proper menu option or flow.
     """
     try:
         from_number_full = str(data.get("From") or "")
@@ -132,41 +141,27 @@ async def whatsapp_menu(data: dict):
 
         # --- MAIN MENU TRIGGERS ---
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
+            # Dynamically build the menu
+            menu_list = "\n".join([f"*{key}* - {value['title']}" for key, value in main_menu.items()])
             reply = (
                 "👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\n"
                 "Chagua huduma kwa kutuma namba:\n\n"
-                "1️⃣ Alama ya Mikopo\n"
-                "2️⃣ Upana wa Mikopo\n"
-                "3️⃣ Nakopesheka!! (Fomu)\n"
-                "4️⃣ Kikokotoo cha Mkopo\n"
-                "5️⃣ Aina za Mikopo\n"
-                "6️⃣ Huduma Nilipo"
+                f"{menu_list}"
             )
             send_meta_whatsapp_message(to=from_number_full, body=reply)
             return PlainTextResponse("OK")
 
-        # --- HANDLE MENU SELECTIONS ---
+        # --- HANDLE USER SELECTION ---
         if incoming_msg in main_menu:
-            selection = incoming_msg
-            item = main_menu[selection]
+            item = main_menu[incoming_msg]
 
-            # --- FLOW OPTIONS (Nakopesheka & Loan Calculator) ---
-            if selection in ["3", "4"]:
-                
-                # Determine the correct starting screen ID based on the selection
-                if selection == "3":
-                    start_screen_id = NAKOPESHEKA_START_SCREEN
-                elif selection == "4":
-                    start_screen_id = CALCULATOR_START_SCREEN
-                else:
-                    return PlainTextResponse("Invalid flow selection logic.", status_code=400)
-                
-                # The payload structure is now correct for starting the Flow
-                flow_payload = {
-                    "screen": start_screen_id,
-                    "data": {}  
-                }
-                
+            # --- IF SELECTION HAS FLOW (3 or 4) ---
+            if "flow_id" in item:
+                start_screen_id = (
+                    NAKOPESHEKA_START_SCREEN if incoming_msg == "3" else CALCULATOR_START_SCREEN
+                )
+                flow_payload = {"screen": start_screen_id, "data": {}}
+
                 send_meta_whatsapp_flow(
                     to=from_number_full,
                     flow_id=item["flow_id"],
@@ -178,12 +173,12 @@ async def whatsapp_menu(data: dict):
                 )
                 return PlainTextResponse("OK")
 
-            # --- PLAIN MESSAGE OPTIONS (1,2,5,6) ---
-            message = f"*{item['title']}*\n{item['description']}"
+            # --- SIMPLE TEXT RESPONSE OPTIONS (1,2,5,6) ---
+            message = f"*{item['title']}*\n\n{item['description']}"
             send_meta_whatsapp_message(to=from_number_full, body=message)
             return PlainTextResponse("OK")
 
-        # --- UNKNOWN COMMAND ---
+        # --- UNKNOWN INPUT ---
         send_meta_whatsapp_message(
             to=from_number_full,
             body="⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena."
@@ -191,9 +186,9 @@ async def whatsapp_menu(data: dict):
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"Error in whatsapp_menu: {e}")
+        logger.exception(f"❌ Error in whatsapp_menu: {e}")
         send_meta_whatsapp_message(
             to=data.get("From"),
             body="❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'."
         )
-        return PlainTextResponse("Internal Error", status_code=500)
+        return PlainTextResponse("Internal Server Error", status_code=500)
