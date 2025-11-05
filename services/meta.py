@@ -4,19 +4,27 @@ import logging
 import requests
 from typing import Dict, Any, Optional
 
+# -----------------------------------
+# LOGGER SETUP
+# -----------------------------------
 logger = logging.getLogger("meta_service")
 logger.setLevel(logging.INFO)
 
+# -----------------------------------
+# ENVIRONMENT VARIABLES
+# -----------------------------------
 ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
 API_URL = f"https://graph.facebook.com/v24.0/{PHONE_NUMBER_ID}/messages"
 MEDIA_API_BASE_URL = "https://graph.facebook.com/v24.0/"
 
-
-# -------------------------------
+# ==============================================================
 # SEND SIMPLE WHATSAPP TEXT MESSAGE
-# -------------------------------
+# ==============================================================
 def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
+    """
+    Send a simple WhatsApp text message using the Meta Graph API.
+    """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
@@ -43,10 +51,9 @@ def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
         logger.error(f"❌ WhatsApp API Error to {to} (Status {status_code}): {error_text}")
         raise RuntimeError(f"Meta API call failed: {e}")
 
-
-# -------------------------------
-# SEND WHATSAPP FLOW
-# -------------------------------
+# ==============================================================
+# SEND WHATSAPP FLOW (Supports Draft and Published Modes)
+# ==============================================================
 def send_meta_whatsapp_flow(
     to: str,
     flow_id: str,
@@ -55,24 +62,27 @@ def send_meta_whatsapp_flow(
     flow_header_text: str = "Huduma ya Mikopo",
     flow_footer_text: str = "Taarifa yako ni siri.",
     flow_action_payload: Optional[Dict[str, Any]] = None,
-    flow_mode: str = "draft" # CORRECTED: Default is now "draft" for testing
+    flow_mode: str = "draft"  # 'draft' for testing, 'published' for production
 ) -> Dict[str, Any]:
     """
-    Send WhatsApp Flow using Meta API.
-    Automatically generates unique flow_token per user.
+    Send a WhatsApp Flow message using the Meta Graph API.
+    Automatically supports both draft and published flow modes.
     """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
-    # Generate a unique flow token per user/message
+    # Generate a unique flow token per message
     flow_token = str(uuid.uuid4())
 
+    # Headers setup (add draft mode header when needed)
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json",
     }
+    if flow_mode == "draft":
+        headers["X-Meta-Flow-Draft"] = "true"
 
-    # Build payload according to Meta Flow API spec
+    # Build payload according to Meta Flow API specification
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -87,11 +97,10 @@ def send_meta_whatsapp_flow(
                 "name": "flow",
                 "parameters": {
                     "flow_message_version": "3",
-                    "flow_token": flow_token,
                     "flow_id": flow_id,
+                    "flow_token": flow_token,
                     "flow_cta": flow_cta,
                     "flow_action": "navigate",
-                    "mode": flow_mode,
                     "flow_action_payload": flow_action_payload or {}
                 }
             }
@@ -99,10 +108,12 @@ def send_meta_whatsapp_flow(
     }
 
     try:
-        logger.info(f"🚀 Sending Flow {flow_id} to {to} with token {flow_token} in {flow_mode} mode.")
+        logger.info(
+            f"🚀 Sending Flow '{flow_id}' to {to} (Mode: {flow_mode}, Token: {flow_token})"
+        )
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
-        logger.info(f"✅ Flow sent to {to}. Response: {response.json()}")
+        logger.info(f"✅ Flow sent successfully to {to}. Response: {response.json()}")
         return response.json()
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response else "N/A"
@@ -110,13 +121,12 @@ def send_meta_whatsapp_flow(
         logger.error(f"❌ WhatsApp Flow API Error for {to} (Status {status_code}): {error_text}")
         raise RuntimeError(f"Meta Flow API call failed: {e}")
 
-
-# -------------------------------
+# ==============================================================
 # GET MEDIA DOWNLOAD URL
-# -------------------------------
+# ==============================================================
 def get_media_url(media_id: str) -> str:
     """
-    Retrieve media download URL from WhatsApp Media ID.
+    Retrieve the download URL of a WhatsApp media file using its media ID.
     """
     if not ACCESS_TOKEN:
         raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
@@ -130,11 +140,15 @@ def get_media_url(media_id: str) -> str:
         response.raise_for_status()
         data = response.json()
         download_url = data.get("url")
+
         if not download_url:
             raise RuntimeError(f"No URL returned for media_id {media_id}. Response: {data}")
+
         logger.info(f"✅ Media URL retrieved for ID {media_id}")
         return download_url
+
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response else "N/A"
-        logger.error(f"❌ Media URL lookup failed for {media_id} (Status {status_code}). Exception: {e}")
+        error_text = e.response.text if e.response else str(e)
+        logger.error(f"❌ Media URL lookup failed for {media_id} (Status {status_code}): {error_text}")
         raise RuntimeError(f"Media URL lookup failed: {e}")
