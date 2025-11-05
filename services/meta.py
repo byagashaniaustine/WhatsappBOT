@@ -54,7 +54,8 @@ def send_meta_whatsapp_flow(
     flow_body_text: str = "",
     flow_header_text: str = "Huduma ya Mikopo",
     flow_footer_text: str = "Taarifa yako ni siri.",
-    flow_action_payload: Optional[Dict[str, Any]] = None
+    flow_action_payload: Optional[Dict[str, Any]] = None,
+    flow_mode: str = "draft" # CORRECTED: Default is now "draft" for testing
 ) -> Dict[str, Any]:
     """
     Send WhatsApp Flow using Meta API.
@@ -90,6 +91,7 @@ def send_meta_whatsapp_flow(
                     "flow_id": flow_id,
                     "flow_cta": flow_cta,
                     "flow_action": "navigate",
+                    "mode": flow_mode,
                     "flow_action_payload": flow_action_payload or {}
                 }
             }
@@ -97,7 +99,7 @@ def send_meta_whatsapp_flow(
     }
 
     try:
-        logger.info(f"🚀 Sending Flow {flow_id} to {to} with token {flow_token}")
+        logger.info(f"🚀 Sending Flow {flow_id} to {to} with token {flow_token} in {flow_mode} mode.")
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
         logger.info(f"✅ Flow sent to {to}. Response: {response.json()}")
