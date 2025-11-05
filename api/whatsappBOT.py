@@ -6,11 +6,9 @@ from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 logger = logging.getLogger("whatsapp_app")
 
 # --- FLOW SCREEN ID CONSTANTS ---
-# These MUST match the 'id' field of the first screen in your Flow definitions
+# These are confirmed correct based on your Flow JSON definitions:
 NAKOPESHEKA_START_SCREEN = "LOAN_APPLICATION" 
-# Assuming a start screen ID for the Loan Calculator Flow.
-# YOU MUST VERIFY this ID fr        om the Flow 1623606141936116's JSON.
-CALCULATOR_START_SCREEN = "CALCULATOR_INPUT" 
+CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK" 
 
 # --- MAIN MENU CONFIG ---
 main_menu = {
@@ -28,14 +26,16 @@ main_menu = {
     "3": {
         "title": "Nakopesheka!! (Fomu ya Uhalali)",
         "description": "Bonyeza kitufe kujaza taarifa zako ili tuangalie kama unastahili mkopo.",
-        "flow_id": "760682547026386",
+        # !!! ACTION REQUIRED: REPLACE THIS with the long DRAFT VERSION ID for Flow 760682547026386
+        "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_LOAN_APPLICATION", 
         "flow_cta": "Anza Fomu ya Mkopo",
         "flow_body_text": "Jaza taarifa zako ili kuanza mchakato wa uchambuzi."
     },
     "4": {
         "title": "Kikokotoo cha Mkopo (Loan Calculator)",
         "description": "Tumia kikokotoo kujua kiwango cha mkopo kinachokufaa kulingana na mapato yako.",
-        "flow_id": "1623606141936116",
+        # !!! ACTION REQUIRED: REPLACE THIS with the long DRAFT VERSION ID for Flow 1623606141936116
+        "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_CALCULATOR", 
         "flow_cta": "Angalia kiwango chako cha mkopo",
         "flow_body_text": "Jaza mapato yako, muda, na riba ili kupata matokeo."
     },
@@ -73,7 +73,7 @@ async def process_loan_calculator_flow(from_number: str, form_data: dict):
         from_number = "+" + from_number
 
     try:
-        repayment_capacity = float(form_data.get("kipato_mwezi", 0))
+        repayment_capacity = float(form_data.get("kipato_mwezi", 0)) 
         duration_months = int(form_data.get("muda_miezi", 0))
         annual_rate_percent = float(form_data.get("riba_mwaka", 0))
 
@@ -153,24 +153,19 @@ async def whatsapp_menu(data: dict):
             # --- FLOW OPTIONS (Nakopesheka & Loan Calculator) ---
             if selection in ["3", "4"]:
                 
-                # *** START OF THE FIX ***
-                
                 # Determine the correct starting screen ID based on the selection
                 if selection == "3":
-                    # Nakopesheka flow uses the LOAN_APPLICATION screen
                     start_screen_id = NAKOPESHEKA_START_SCREEN
                 elif selection == "4":
-                    # Loan Calculator flow uses a specific input screen (e.g., CALCULATOR_INPUT)
                     start_screen_id = CALCULATOR_START_SCREEN
                 else:
-                    # Should be unreachable given the outer 'if' condition
                     return PlainTextResponse("Invalid flow selection logic.", status_code=400)
                 
+                # The payload structure is now correct for starting the Flow
                 flow_payload = {
-                    "screen": start_screen_id, # <-- Using the actual flow screen ID
+                    "screen": start_screen_id,
                     "data": {}  
                 }
-                # *** END OF THE FIX ***
                 
                 send_meta_whatsapp_flow(
                     to=from_number_full,
