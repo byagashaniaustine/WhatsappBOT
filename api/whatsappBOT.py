@@ -3,17 +3,15 @@ import math
 from fastapi.responses import PlainTextResponse
 from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
-logger = logging.getLogger("whatsapp_app")
 
-# ---------------------------------
-# FLOW SCREEN ID CONSTANTS
-# ---------------------------------
+logger = logging.getLogger("whatsapp_app")
+logger.setLevel(logging.INFO)
+
+
 NAKOPESHEKA_START_SCREEN = "LOAN_APPLICATION"
 CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK"
 
-# ---------------------------------
-# MAIN MENU CONFIGURATION
-# ---------------------------------
+
 main_menu = {
     "1": {
         "title": "Alama ya Mikopo (Credit Scoring)",
@@ -29,14 +27,14 @@ main_menu = {
     "3": {
         "title": "Nakopesheka!! (Fomu ya Uhalali)",
         "description": "Bonyeza kitufe kujaza taarifa zako ili tuangalie kama unastahili mkopo.",
-        "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_LOAN_APPLICATION", 
+        "flow_id": "760682547026386",  # Draft version ID
         "flow_cta": "Anza Fomu ya Mkopo",
         "flow_body_text": "Jaza taarifa zako ili kuanza mchakato wa uchambuzi."
     },
     "4": {
         "title": "Kikokotoo cha Mkopo (Loan Calculator)",
         "description": "Tumia kikokotoo kujua kiwango cha mkopo kinachokufaa kulingana na mapato yako.",
-        "flow_id": "REPLACE_WITH_DRAFT_VERSION_ID_FOR_CALCULATOR", 
+        "flow_id": "1623606141936116",  # Draft version ID
         "flow_cta": "Angalia kiwango chako cha mkopo",
         "flow_body_text": "Jaza mapato yako, muda, na riba ili kupata matokeo."
     },
@@ -50,9 +48,8 @@ main_menu = {
     }
 }
 
-
 # ---------------------------------
-# LOAN CALCULATOR HELPER FUNCTION
+# LOAN CALCULATOR HELPER
 # ---------------------------------
 def calculate_max_loan(repayment_capacity: float, duration_months: int, annual_rate_percent: float) -> float:
     """Hesabu kiasi cha juu cha mkopo kulingana na uwezo wa kulipa, muda, na riba."""
@@ -62,20 +59,12 @@ def calculate_max_loan(repayment_capacity: float, duration_months: int, annual_r
     periodic_rate = (annual_rate_percent / 100) / 12
     try:
         numerator = 1 - math.pow(1 + periodic_rate, -duration_months)
-        principal = repayment_capacity * (numerator / periodic_rate)
-        return principal
+        return repayment_capacity * (numerator / periodic_rate)
     except Exception:
         return 0.0
 
-
-# ---------------------------------
-# FLOW HANDLERS
-# ---------------------------------
 async def process_loan_calculator_flow(from_number: str, form_data: dict):
-    """
-    Process Loan Calculator Flow submission.
-    form_data example: {"kipato_mwezi": ..., "muda_miezi": ..., "riba_mwaka": ...}
-    """
+    """Process Loan Calculator Flow submission."""
     if not from_number.startswith("+"):
         from_number = "+" + from_number
 
@@ -91,8 +80,7 @@ async def process_loan_calculator_flow(from_number: str, form_data: dict):
             f"➡️ Uwezo wa kulipa (PMT): *Tsh {repayment_capacity:,.0f}*\n"
             f"➡️ Muda wa Mkopo: *{duration_months} miezi*\n"
             f"➡️ Riba ya mwaka: *{annual_rate_percent}%*\n\n"
-            f"Kiasi cha juu cha mkopo kinachokadiriwa ni:\n"
-            f"💰 *Tsh {max_loan:,.0f}*"
+            f"Kiasi cha juu cha mkopo kinachokadiriwa ni:\n💰 *Tsh {max_loan:,.0f}*"
         )
 
     except Exception as e:
@@ -105,10 +93,7 @@ async def process_loan_calculator_flow(from_number: str, form_data: dict):
 
 
 async def process_nakopesheka_flow(from_number: str, form_data: dict):
-    """
-    Process Nakopesheka Flow submission.
-    Confirms user's name and requests document uploads.
-    """
+    """Process Nakopesheka Flow submission."""
     if not from_number.startswith("+"):
         from_number = "+" + from_number
 
@@ -125,13 +110,8 @@ async def process_nakopesheka_flow(from_number: str, form_data: dict):
     return PlainTextResponse("OK")
 
 
-# ---------------------------------
-# MAIN WHATSAPP MENU HANDLER
-# ---------------------------------
 async def whatsapp_menu(data: dict):
-    """
-    Handle incoming WhatsApp messages and route to proper menu option or flow.
-    """
+    """Handle incoming WhatsApp messages and route to proper menu option or flow."""
     try:
         from_number_full = str(data.get("From") or "")
         if from_number_full and not from_number_full.startswith("+"):
@@ -141,25 +121,18 @@ async def whatsapp_menu(data: dict):
 
         # --- MAIN MENU TRIGGERS ---
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
-            # Dynamically build the menu
             menu_list = "\n".join([f"*{key}* - {value['title']}" for key, value in main_menu.items()])
-            reply = (
-                "👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\n"
-                "Chagua huduma kwa kutuma namba:\n\n"
-                f"{menu_list}"
-            )
+            reply = f"👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
             send_meta_whatsapp_message(to=from_number_full, body=reply)
             return PlainTextResponse("OK")
 
-        # --- HANDLE USER SELECTION ---
+        # --- USER SELECTION ---
         if incoming_msg in main_menu:
             item = main_menu[incoming_msg]
 
             # --- IF SELECTION HAS FLOW (3 or 4) ---
             if "flow_id" in item:
-                start_screen_id = (
-                    NAKOPESHEKA_START_SCREEN if incoming_msg == "3" else CALCULATOR_START_SCREEN
-                )
+                start_screen_id = NAKOPESHEKA_START_SCREEN if incoming_msg == "3" else CALCULATOR_START_SCREEN
                 flow_payload = {"screen": start_screen_id, "data": {}}
 
                 send_meta_whatsapp_flow(
@@ -169,11 +142,12 @@ async def whatsapp_menu(data: dict):
                     flow_body_text=item.get("flow_body_text", "Tuma taarifa zako."),
                     flow_header_text=item.get("title", "Huduma ya Mikopo"),
                     flow_footer_text="Taarifa yako ni siri.",
-                    flow_action_payload=flow_payload
+                    flow_action_payload=flow_payload,
+                    flow_mode="draft"  # Draft mode for testing
                 )
                 return PlainTextResponse("OK")
 
-            # --- SIMPLE TEXT RESPONSE OPTIONS (1,2,5,6) ---
+            # --- SIMPLE TEXT RESPONSE OPTIONS ---
             message = f"*{item['title']}*\n\n{item['description']}"
             send_meta_whatsapp_message(to=from_number_full, body=message)
             return PlainTextResponse("OK")

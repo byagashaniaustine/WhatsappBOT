@@ -22,9 +22,6 @@ MEDIA_API_BASE_URL = "https://graph.facebook.com/v24.0/"
 # SEND SIMPLE WHATSAPP TEXT MESSAGE
 # ==============================================================
 def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
-    """
-    Send a simple WhatsApp text message using the Meta Graph API.
-    """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
@@ -52,7 +49,7 @@ def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
         raise RuntimeError(f"Meta API call failed: {e}")
 
 # ==============================================================
-# SEND WHATSAPP FLOW (Supports Draft and Published Modes)
+# SEND WHATSAPP FLOW
 # ==============================================================
 def send_meta_whatsapp_flow(
     to: str,
@@ -64,17 +61,11 @@ def send_meta_whatsapp_flow(
     flow_action_payload: Optional[Dict[str, Any]] = None,
     flow_mode: str = "draft"  # 'draft' for testing, 'published' for production
 ) -> Dict[str, Any]:
-    """
-    Send a WhatsApp Flow message using the Meta Graph API.
-    Automatically supports both draft and published flow modes.
-    """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
-    # Generate a unique flow token per message
     flow_token = str(uuid.uuid4())
 
-    # Headers setup (add draft mode header when needed)
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json",
@@ -82,10 +73,19 @@ def send_meta_whatsapp_flow(
     if flow_mode == "draft":
         headers["X-Meta-Flow-Draft"] = "true"
 
-    # Build payload according to Meta Flow API specification
+    # Draft mode does not support flow_action or flow_action_payload
+    parameters = {
+        "flow_message_version": "3",
+        "flow_id": flow_id,
+        "flow_token": flow_token,
+        "flow_cta": flow_cta,
+    }
+    if flow_mode != "draft" and flow_action_payload:
+        parameters["flow_action"] = "navigate"
+        parameters["flow_action_payload"] = flow_action_payload
+
     payload = {
         "messaging_product": "whatsapp",
-        "recipient_type": "individual",
         "to": to,
         "type": "interactive",
         "interactive": {
@@ -95,22 +95,13 @@ def send_meta_whatsapp_flow(
             "footer": {"text": flow_footer_text},
             "action": {
                 "name": "flow",
-                "parameters": {
-                    "flow_message_version": "3",
-                    "flow_id": flow_id,
-                    "flow_token": flow_token,
-                    "flow_cta": flow_cta,
-                    "flow_action": "navigate",
-                    "flow_action_payload": flow_action_payload or {}
-                }
+                "parameters": parameters
             }
         }
     }
 
     try:
-        logger.info(
-            f"🚀 Sending Flow '{flow_id}' to {to} (Mode: {flow_mode}, Token: {flow_token})"
-        )
+        logger.info(f"🚀 Sending Flow '{flow_id}' to {to} (Mode: {flow_mode}, Token: {flow_token})")
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
         logger.info(f"✅ Flow sent successfully to {to}. Response: {response.json()}")
@@ -125,9 +116,6 @@ def send_meta_whatsapp_flow(
 # GET MEDIA DOWNLOAD URL
 # ==============================================================
 def get_media_url(media_id: str) -> str:
-    """
-    Retrieve the download URL of a WhatsApp media file using its media ID.
-    """
     if not ACCESS_TOKEN:
         raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
 
@@ -140,13 +128,10 @@ def get_media_url(media_id: str) -> str:
         response.raise_for_status()
         data = response.json()
         download_url = data.get("url")
-
         if not download_url:
             raise RuntimeError(f"No URL returned for media_id {media_id}. Response: {data}")
-
         logger.info(f"✅ Media URL retrieved for ID {media_id}")
         return download_url
-
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response else "N/A"
         error_text = e.response.text if e.response else str(e)
