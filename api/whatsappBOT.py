@@ -5,6 +5,13 @@ from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_flow
 
 logger = logging.getLogger("whatsapp_app")
 
+# --- FLOW SCREEN ID CONSTANTS ---
+# These MUST match the 'id' field of the first screen in your Flow definitions
+NAKOPESHEKA_START_SCREEN = "LOAN_APPLICATION" 
+# Assuming a start screen ID for the Loan Calculator Flow.
+# YOU MUST VERIFY this ID fr        om the Flow 1623606141936116's JSON.
+CALCULATOR_START_SCREEN = "CALCULATOR_INPUT" 
+
 # --- MAIN MENU CONFIG ---
 main_menu = {
     "1": {
@@ -145,10 +152,26 @@ async def whatsapp_menu(data: dict):
 
             # --- FLOW OPTIONS (Nakopesheka & Loan Calculator) ---
             if selection in ["3", "4"]:
+                
+                # *** START OF THE FIX ***
+                
+                # Determine the correct starting screen ID based on the selection
+                if selection == "3":
+                    # Nakopesheka flow uses the LOAN_APPLICATION screen
+                    start_screen_id = NAKOPESHEKA_START_SCREEN
+                elif selection == "4":
+                    # Loan Calculator flow uses a specific input screen (e.g., CALCULATOR_INPUT)
+                    start_screen_id = CALCULATOR_START_SCREEN
+                else:
+                    # Should be unreachable given the outer 'if' condition
+                    return PlainTextResponse("Invalid flow selection logic.", status_code=400)
+                
                 flow_payload = {
-                    "screen": selection,
-                    "data": {}  # optionally prefill form data if available
+                    "screen": start_screen_id, # <-- Using the actual flow screen ID
+                    "data": {}  
                 }
+                # *** END OF THE FIX ***
+                
                 send_meta_whatsapp_flow(
                     to=from_number_full,
                     flow_id=item["flow_id"],
