@@ -14,15 +14,12 @@ CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK"
 
 main_menu = {
     "1": {
-        "title": "Alama ya Mikopo (Credit Scoring)",
-        "description": (
-            "Alama ya Mikopo inaonyesha uaminifu wako wa kifedha. "
-            "Alama nzuri hukusaidia kupata mikopo kwa urahisi zaidi."
-        )
+        "title": "Fahamu Alama za Mikopo (Credit Scoring)",
+        "description": "Alama ya mikopo ni kipimo kinachoonyesha jinsi unavyoaminika kifedha. Kwa lugha rahisi, ni kama ripoti ya tabia yako ya kifedha — inaonyesha kama wewe ni mtu wa kuaminika au la, katika kukopa na kulipa fedha. Alama hii hutengenezwa na taasisi maalum kama Credit Reference Bureau (CRB) kwa kutumia taarifa zako za kifedha kutoka benki, taasisi za mikopo, au hata huduma za mkopo mtandaoni kama Tala, Timiza, au Fuliza.\n\nIli kupata alama nzuri ya mikopo, ni muhimu ulipie mikopo yako kwa wakati, usiwe na madeni mengi yanayozidi uwezo wako, na uendelee kutumia huduma za kifedha kwa nidhamu. Kadri unavyodumisha historia nzuri ya ulipaji, ndivyo alama yako inavyoongezeka.\n\nFaida ya kuwa na alama nzuri ni kwamba benki na taasisi za kifedha zitakuona kama mteja wa kuaminika. Hii hukurahisishia kupata mikopo mikubwa zaidi, kwa masharti nafuu na riba ndogo. Lakini kama alama yako ni mbaya, unaweza kukataliwa mkopo au kupewa kwa masharti magumu zaidi.\n\nKwa ufupi, alama ya mikopo ni kama jina lako la kifedha. Unapoitunza vizuri, unajitengenezea heshima na fursa zaidi za kifedha katika siku za usoni."
     },
     "2": {
-        "title": "Upana wa Mikopo (Credit Bandwidth)",
-        "description": "Inaonyesha kiwango cha juu cha mkopo unachoweza kukopa kulingana na kipato chako."
+        "title": "Kiwango cha Mkopo (Credit Bandwidth)",
+        "description": "Kiwango cha mkopo ni kiasi cha juu cha fedha ambacho taasisi ya kifedha inaweza kukukopesha kulingana na hali yako ya kifedha. Kwa maneno rahisi, ni kipimo kinachoonyesha uwezo wako wa kukopa bila kuathiri uwezo wako wa kurejesha. Benki au taasisi za mikopo hutumia taarifa kama kipato chako cha kila mwezi, gharama zako za maisha, na madeni uliyonayo ili kuamua kiwango hicho.\n\nKwa mfano, kama kipato chako ni kikubwa na una historia nzuri ya ulipaji wa mikopo, taasisi inaweza kukuamini zaidi na kukuruhusu kukopa kiasi kikubwa. Lakini kama kipato chako ni kidogo au una madeni mengi, kiwango chako cha mkopo hupunguzwa ili kuepuka hatari ya kushindwa kulipa.\n\nKuelewa kiwango chako cha mkopo ni muhimu kwa sababu kinakusaidia kupanga fedha zako vizuri. Unajua mpaka gani unaweza kukopa bila kujitumbukiza kwenye matatizo ya kifedha. Kadri unavyoongeza kipato na kudumisha tabia nzuri ya ulipaji, ndivyo kiwango chako cha mkopo kinavyoongezeka kwa muda."
     },
     "3": {
         "title": "Nakopesheka!! (Fomu ya Uhalali)",
@@ -39,13 +36,14 @@ main_menu = {
         "flow_body_text": "Jaza mapato yako, muda, na riba ili kupata matokeo."
     },
     "5": {
-        "title": "Aina za Mikopo",
-        "description": "Kuna mikopo ya biashara, elimu, nyumba, na mikopo ya dharura."
+        "title": "Aina za Mikopo kulingana na Riba (Types of Loans by Interest Rate)",
+        "description": "Mikopo inaweza kugawanywa katika makundi mawili makuu kulingana na jinsi riba yake inavyobadilika au kubaki vilevile. Hii inaitwa riba ya kudumu (fixed interest) na riba inayobadilika (variable interest).\n\n1️⃣ **Mkopo wenye Riba ya Kudumu (Fixed Interest Loan)**\nHapa kiwango cha riba hakibadiliki katika kipindi chote cha mkopo. Hii inamaanisha utakuwa unalipa kiasi kilekile cha malipo kila mwezi hadi mkopo wako umalizike. Ni aina ya mkopo ambayo inasaidia kupanga bajeti kwa urahisi, kwa sababu unajua kiasi utakacholipa kila mwezi bila mshangao. Hata kama riba sokoni itaongezeka, yako inabaki pale pale.\n\nMfano: Ukipewa mkopo wa milioni 5 kwa riba ya 10% kwa miaka 2, utalipa kiasi kilekile cha malipo kila mwezi hadi mwisho.\n\n2️⃣ **Mkopo wenye Riba Inayobadilika (Variable Interest Loan)**\nHapa kiwango cha riba hubadilika kulingana na mabadiliko ya soko au sera za benki kuu. Inaweza kupanda au kushuka kadri uchumi unavyobadilika. Wakati mwingine hii inaweza kuwa na faida kama riba itashuka, lakini pia inaweza kuongeza mzigo wa malipo kama riba itapanda.\n\nMfano: Ukipewa mkopo wa milioni 5 kwa riba ya 12% na baada ya miezi 6 riba ya soko ikipanda hadi 15%, malipo yako ya kila mwezi nayo yataongezeka.\n\nKwa ufupi, mikopo yenye riba ya kudumu ni salama na rahisi kupanga bajeti, wakati mikopo yenye riba inayobadilika inaweza kuwa na faida au hasara kulingana na hali ya soko. Ni muhimu kuelewa aina hizi kabla ya kukopa, ili ujue hatari na manufaa yake."
     },
-    "6": {
-        "title": "Huduma za Nilipo (Where I Am)",
-        "description": "Huduma za karibu nawe: mikopo midogo, malipo, na mikopo ya haraka."
+    "6":{
+        "title": "Huduma za Mikopo za Manka",
+        "description": "Manka inakuletea aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe.\n\n1️⃣ **Simu za Mikopo** – Mikopo hii inakusaidia kununua simu mpya au kulipa simu unazotumia, bila kushughulikia gharama kubwa mara moja.\n\n2️⃣ **Gari za Mikopo** – Kwa mtu anayetaka kununua gari la kibinafsi au la biashara, Manka inakupa mkopo unaoweza kulipwa kwa awamu, ukipunguza mzigo wa kifedha.\n\n3️⃣ **Mikopo ya Kilimo (Agriculture Utilities and Equipments)** – Mikopo hii inasaidia wakulima kununua mashine, zana, na vifaa vya kilimo kama ploughs, pampu za maji, na mbegu ili kuongeza tija na uzalishaji.\n\n4️⃣ **Vifaa vya Tiba (Medical Equipments and Medical Tools)** – Kwa watoa huduma za afya au hospitali ndogo, Manka inatoa mikopo ya kununua vifaa vya matibabu kama mashine za vipimo, viti vya upasuaji, na vifaa vingine muhimu.\n\nKwa kifupi, **Huduma za Mikopo za Manka** ni njia rahisi ya kupata pesa kwa ajili ya mahitaji yako muhimu, miradi ya biashara, au uwekezaji mdogo, bila kushughulikia gharama kubwa mara moja."
     }
+
 }
 
 # ---------------------------------
