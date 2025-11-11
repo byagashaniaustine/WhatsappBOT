@@ -14,7 +14,7 @@ CALCULATOR_START_SCREEN = "ELIGIBILITY_CHECK"
 
 main_menu = {
     "1": {
-        "title": "Fahamu Alama za Mikopo (Credit Scoring)",
+        "title": "Fahamu kuhusu Alama za Mikopo (Credit Scoring)",
         "description": "Alama ya mikopo ni kipimo kinachoonyesha jinsi unavyoaminika kifedha. Kwa lugha rahisi, ni kama ripoti ya tabia yako ya kifedha — inaonyesha kama wewe ni mtu wa kuaminika au la, katika kukopa na kulipa fedha. Alama hii hutengenezwa na taasisi maalum kama Credit Reference Bureau (CRB) kwa kutumia taarifa zako za kifedha kutoka benki, taasisi za mikopo, au hata huduma za mkopo mtandaoni kama Tala, Timiza, au Fuliza.\n\nIli kupata alama nzuri ya mikopo, ni muhimu ulipie mikopo yako kwa wakati, usiwe na madeni mengi yanayozidi uwezo wako, na uendelee kutumia huduma za kifedha kwa nidhamu. Kadri unavyodumisha historia nzuri ya ulipaji, ndivyo alama yako inavyoongezeka.\n\nFaida ya kuwa na alama nzuri ni kwamba benki na taasisi za kifedha zitakuona kama mteja wa kuaminika. Hii hukurahisishia kupata mikopo mikubwa zaidi, kwa masharti nafuu na riba ndogo. Lakini kama alama yako ni mbaya, unaweza kukataliwa mkopo au kupewa kwa masharti magumu zaidi.\n\nKwa ufupi, alama ya mikopo ni kama jina lako la kifedha. Unapoitunza vizuri, unajitengenezea heshima na fursa zaidi za kifedha katika siku za usoni."
     },
     "2": {
