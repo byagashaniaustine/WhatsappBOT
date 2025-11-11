@@ -30,18 +30,6 @@ def store_file(
     file_data: bytes, 
     mime_type: str, 
 ) -> dict | None:
-    """
-    Hupakia data ya faili kwenye Supabase Storage na kuhifadhi metadata yake katika jedwali.
-
-    Args:
-        user_id (str): Kitambulisho cha mtumiaji.
-        user_name (str): Jina la mtumiaji.
-        user_phone (str): Namba ya simu.
-        flow_type (str): Aina ya mtiririko.
-        file_name (str): Jina kamili la kipekee la faili (k.m., 'user_id_uuid.ext').
-        file_data (bytes): Data ya faili.
-        mime_type (str): Aina ya MIME ya faili.
-    """
     try:
         # Njia ya Supabase Storage: {user_id}/{file_name}
         supabase_path = f"{user_id}/{file_name}"
@@ -79,7 +67,7 @@ def store_file(
         }
 
         # Jedwali la "wHatsappUsers" linatumika kwa metadata
-        result = supabase.table("wHatsappUsers").insert(metadata).execute()
+        result = supabase.table("WHatsappUsers").insert(metadata).execute()
         
         # Hakikisha metadata imehifadhiwa
         if not (getattr(result, "data", None) and len(result.data) > 0):
