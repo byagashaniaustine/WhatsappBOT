@@ -67,7 +67,7 @@ def store_file(
         }
 
         # Jedwali la "wHatsappUsers" linatumika kwa metadata
-        result = supabase.table("WHatsappUsers").insert(metadata).execute()
+        result = supabase.table("wHatsappUsers").insert(metadata).execute()
         
         # Hakikisha metadata imehifadhiwa
         if not (getattr(result, "data", None) and len(result.data) > 0):
