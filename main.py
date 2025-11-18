@@ -34,7 +34,7 @@ async def verify_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Verification failed.")
 
     except Exception as e:
-        logger.error(f"❌ Error during webhook verification: {e}")
+        logger.error(f"❌ Error error during webhook verification: {e}")
         raise HTTPException(status_code=403, detail="Webhook verification error.")
 
 
