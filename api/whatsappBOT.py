@@ -20,7 +20,7 @@ main_menu = {
     "3": {
         "title": "Nakopesheka!! (Uwezo wa Kukopa)",
         "description": (
-            " *Ili ujue kama nakopesheka tambua Uwezo wa Kukopa (Affordability)*\n\n"
+            " *Kujua kama nakopesheka tambua Uwezo wa Kukopa (Affordability)*\n\n"
             "Affordability ni kipimo kinachoonyesha uwezo wako wa kulipa mkopo bila "
             "kuumiza bajeti yako ya kila siku. Tunapima kipato chako, matumizi yako, "
             "historia ya ulipaji na uaminifu wa kifedha.\n\n"
