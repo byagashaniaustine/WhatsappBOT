@@ -54,11 +54,10 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
         # 5. Handle Manka results
         if isinstance(affordability_data, str):
             return (
-                f"❌ Hali ya Kufuzu kwa Mkopo: DATA HAITOSHI (INSUFFICIENT DATA)\n"
+                f" Taarifa hizo hazitoshi kutafuta uwezo wa mkopo(INSUFFICIENT DATA)\n"
                 f"---------------------------------------------\n\n"
-                f"Hatukuweza kutoa ofa ya mkopo kwa sababu:\n"
-                f"*{affordability_data}.*\n\n"
-                f"Tafadhali wasilisha taarifa inayoonyesha *historia ya miezi 3 kamili ya miamala.*"
+                f"Hatukuweza kujua viwango vyako vya mkopo kwa sababu,Taarifa zilizokusanywa ni za chini ya miezi 3 :\n"
+                f"Tafadhali wasilisha taarifa inayoonyesha *historia ya miezi 3 kamili au na zaidi ya miamala.*"
             )
 
         elif isinstance(affordability_data, dict):
@@ -68,15 +67,10 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             max_credit = max(high_risk, medium_risk, low_risk)
 
             return (
-                f"✅ Hali ya Kufuzu kwa Mkopo: UMEKUBALIKA (QUALIFIED)\n"
-                f"---------------------------------------------\n\n"
-                f"Kulingana na uchambuzi wa taarifa zako, unakubalika kupata mkopo usiozidi:\n\n"
-                f"TZS {'{0:,.0f}'.format(max_credit)} (Uwezo wa Juu Kabisa wa Ofa)\n\n"
-                f"Viwango vya Hatari:\n"
-                f"--- High Risk: TZS {'{0:,.0f}'.format(high_risk)}\n"
-                f"--- Moderate Risk: TZS {'{0:,.0f}'.format(medium_risk)}\n"
-                f"--- Low Risk: TZS {'{0:,.0f}'.format(low_risk)}\n\n"
-                f"Tunapendekeza uanze na kiwango cha hatari chini kwa idhini ya haraka."
+                f"TZS {'{0:,.0f}'.format(max_credit)} (Kulingana na uchambuzi wa taarifa zako,Kiwango chako cha Juu Kabisa)\n\n"
+                f"High ni hiki: TZS {'{0:,.0f}'.format(high_risk)}\n"
+                f"Kiwango cha usalama unachoweza kukopa ni kuanzia hiki yaan Low(cha chini): TZS {'{0:,.0f}'.format(low_risk)} mpaka hapa, medium(cha kati): TZS {'{0:,.0f}'.format(medium_risk)}\n\n"
+                f"Tunapendekeza uanze na kiwango cha chini kwa urejeshaji wa haraka kwa kadiri unavyorejesha ndipo kiwango chako cha mkopo kitakavyoongezeka."
             )
 
         else:

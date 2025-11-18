@@ -93,7 +93,7 @@ async def whatsapp_webhook(request: Request):
             )
 
             logger.info(f"📎 File processed for {from_number}: {result}")
-            send_meta_whatsapp_message(from_number, "✅ Faili lako limepokelewa, linafanyiwa uchambuzi.")
+            send_meta_whatsapp_message(from_number, " Faili lako limepokelewa, linafanyiwa uchambuzi.")
 
         # ------------------------------
         # ❌ UNKNOWN MESSAGE TYPE

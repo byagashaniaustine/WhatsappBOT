@@ -62,10 +62,10 @@ def process_file_upload(user_id, user_name, user_phone, flow_type, media_url: st
             # Tumia huduma ya uchambuzi wa picha ya Gemini (kwa taarifa za kifedha)
             result = analyze_image(file_data, mime_type) 
             summary = result.get("summary") if isinstance(result, dict) else str(result)
-            analysis_summary = f"📸 *Uchambuzi wa Picha umekamilika! (Gemini Financial Analysis)*\n\n{summary}"
+            analysis_summary = f"*Uchambuzi wa Picha umekamilika! (Gemini Financial Analysis)*\n\n{summary}"
 
         else:
-            message = f"⚠️ Aina ya faili hili ({mime_type}) haikubaliki. Tafadhali tuma PDF au Picha (JPG/PNG/WEBP)."
+            message = f" Aina ya faili hili ({mime_type}) haikubaliki. Tafadhali tuma PDF au Picha (JPG/PNG/WEBP)."
             send_meta_whatsapp_message(user_phone, message)
             return {"status": "unsupported", "message": message}
             
@@ -89,7 +89,7 @@ def process_file_upload(user_id, user_name, user_phone, flow_type, media_url: st
         logger.info(f"File stored successfully at URL: {stored_url}")
 
         # 4. Tuma ujumbe wa mwisho kwa mtumiaji
-        final_message = analysis_summary if analysis_summary else "✅ Faili limepakia na kuhifadhiwa. Uchambuzi umefanyika."
+        final_message = analysis_summary if analysis_summary else "Faili limepakiwa na kuhifadhiwa. Uchambuzi umefanyika."
         send_meta_whatsapp_message(user_phone, final_message)
         
         return {"status": "success", "summary": final_message, "file_url": stored_url}
@@ -98,10 +98,10 @@ def process_file_upload(user_id, user_name, user_phone, flow_type, media_url: st
         # Kushughulikia hitilafu ikiwa upakuaji wa Meta unashindwa (k.m., 401 Unauthorized)
         error_msg = f"Kosa la kupakua faili (HTTP {he.response.status_code}): Inawezekana kiungo kimeisha muda au kuna shida katika uthibitishaji (Meta Access Token)."
         logger.exception(f"❌ HTTP Error downloading file: {he}")
-        send_meta_whatsapp_message(user_phone, f"❌ {error_msg}")
+        send_meta_whatsapp_message(user_phone, f"{error_msg}")
         return {"status": "error", "message": error_msg}
         
     except Exception as e:
         logger.exception(f"❌ Hitilafu katika kuchakata faili: {e}")
-        send_meta_whatsapp_message(user_phone, f"❌ Samahani, hitilafu imetokea wakati wa kuchambua au kuhifadhi faili lako: {str(e)}")
+        send_meta_whatsapp_message(user_phone, f" Samahani, hitilafu imetokea wakati wa kuchambua au kuhifadhi faili lako: {str(e)}")
         return {"status": "error", "message": str(e)}

@@ -21,20 +21,20 @@ main_menu = {
     "3": {
         "title": "Nakopesheka!! (Uwezo wa Kukopa)",
         "description": (
-            "💳 *Ili ujue kama nakopesheka tambua Uwezo wa Kukopa (Affordability)*\n\n"
+            " *Ili ujue kama nakopesheka tambua Uwezo wa Kukopa (Affordability)*\n\n"
             "Affordability ni kipimo kinachoonyesha uwezo wako wa kulipa mkopo bila "
             "kuumiza bajeti yako ya kila siku. Tunapima kipato chako, matumizi yako, "
             "historia ya ulipaji na uaminifu wa kifedha.\n\n"
 
-            "📊 *Manka Affordability Score* inaonyesha kiwango cha mkopo unachoweza kuchukua:\n"
+            " *Manka Affordability Score* inaonyesha kiwango cha mkopo unachoweza kuchukua:\n"
             "• *Score ya Juu* — Kiwango kinachoonesha kiasi chako cha juu unachoweza kukopa.\n"
             "• *Score ya Kati (Moderate)* — Kiwango kinachoonesha kiasi chako cha kati unachoweza kukopa sio mdogo sana wala sio mkubwa sana.\n"
             "• *Score ya Chini* — Hiki ndicho kiwango cha chini unachoweza kuchukua mkopo ambacho ni salama kuanzia.\n\n"
 
-            "⚠️ *Ushauri:* Tunashauri uanze na kiwango cha chini ili ujenge historia nzuri ya ulipaji. "
+            " *Ushauri:* Tunashauri uanze na kiwango cha chini ili ujenge historia nzuri ya ulipaji. "
             "Kadri unavyolipa kwa wakati, score inaongezeka na unaweza kukopa zaidi.\n\n"
 
-            "📄 Sasa tuma faili la PDF za nyaraka zako ( salary slip au bank statement) zisizopungua miezi mitatu "
+            " Sasa tuma faili la PDF za nyaraka zako ( salary slip au bank statement) zisizopungua miezi mitatu "
             "ili tukadirie score yako na kujua kiwango chako halisi cha mkopo."
         )
     },
@@ -49,21 +49,21 @@ main_menu = {
         "description": (
         "Mikopo inaweza kugawanywa kwa aina mbalimbali kulingana na riba, malipo, na madhumuni:\n\n"
 
-        "1️⃣ *Mikopo kwa Riba*:\n"
+        "1️*Mikopo kwa Riba*:\n"
         "   • *Riba ya Kudumu (Fixed Interest)* – Kiasi unacholipa kila mwezi hakibadiliki kwa muda wote wa mkopo.\n"
         "   • *Riba Inayobadilika (Variable Interest)* – Kiasi unacholipa kinaweza kupanda au kushuka kulingana na mabadiliko ya soko.\n\n"
 
-        "2️⃣ *Mikopo kwa Awamu (Installment Loans)*:\n"
+        "2️ *Mikopo kwa Awamu (Installment Loans)*:\n"
         "   • Malipo ya Kila Mwezi – Una malipo ya kila mwezi yaliyopangwa.\n"
         "   • Malipo ya Robo Mwaka au Mwaka – Malipo yapangwa kila robo au mwaka.\n\n"
 
-        "3️⃣ *Mikopo ya Kawaida / Standard Loans*:\n"
+        "3️ *Mikopo ya Kawaida / Standard Loans*:\n"
         "   • Mikopo ya kawaida inayotolewa na benki au taasisi, yenye riba iliyoainishwa na muda maalumu.\n\n"
 
-        "4️⃣ *Mikopo ya Haraka / Midogo (Quick Loans / Microloans)*:\n"
+        "4️ *Mikopo ya Haraka / Midogo (Quick Loans / Microloans)*:\n"
         "   • Mikopo midogo, mara nyingi mtandaoni, kwa masharti rahisi na malipo ya haraka.\n\n"
 
-        "⚠️ Kila aina ina masharti yake, riba tofauti, na faida/hatari zake. Ni muhimu kuelewa aina ya mkopo unaochukua ili kuepuka matatizo ya kifedha."
+        " Kila aina ina masharti yake, riba tofauti, na faida/hatari zake. Ni muhimu kuelewa aina ya mkopo unaochukua ili kuepuka matatizo ya kifedha."
         )
     },
 
@@ -72,10 +72,10 @@ main_menu = {
         "description": (
         "Manka inakuletea aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe:\n\n"
         
-        "1️⃣ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
-        "2️⃣ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
-        "3️⃣ **Cash by Car Card kupitia Kibungo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
-        "⚠️ Kila huduma ina masharti yake maalumu, riba, na muda wa malipo. Hakikisha unakagua masharti kabla ya kukopa."
+        "1️ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
+        "2️ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
+        "3️ **Cash by Car Card kupitia Kibungo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
+        " *Kila huduma ina masharti yake maalumu, riba, na muda wa malipo. Hakikisha unakagua masharti kabla ya kukopa."
         )
     }
 
@@ -131,7 +131,7 @@ async def whatsapp_menu(data: dict):
                     monthly_payment = calculate_monthly_payment(P, n, r)
 
                     message = (
-                        f"💰 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
+                        f" *Matokeo ya Kikokotoo cha Mkopo*\n\n"
                         f"Kiasi cha mkopo: Tsh {P:,.0f}\n"
                         f"Muda: {n} miezi\n"
                         f"Riba ya mwaka: {r}%\n\n"
@@ -148,7 +148,7 @@ async def whatsapp_menu(data: dict):
         # --- MAIN MENU TRIGGERS ---
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
             menu_list = "\n".join([f"*{key}* - {value['title']}" for key, value in main_menu.items()])
-            reply = f"👋 *Karibu kwenye Huduma za Mikopo za Manka!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
+            reply = f" *Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
             send_meta_whatsapp_message(from_number, reply)
             return PlainTextResponse("OK")
 
@@ -164,10 +164,10 @@ async def whatsapp_menu(data: dict):
                 return PlainTextResponse("OK")
 
         # --- UNKNOWN INPUT ---
-        send_meta_whatsapp_message(from_number, "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.")
+        send_meta_whatsapp_message(from_number, " Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.")
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"❌ Error in whatsapp_menu: {e}")
-        send_meta_whatsapp_message(from_number, "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.")
+        logger.exception(f" Error in whatsapp_menu: {e}")
+        send_meta_whatsapp_message(from_number, " Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.")
         return PlainTextResponse("Internal Server Error", status_code=500)

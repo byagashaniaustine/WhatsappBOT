@@ -31,7 +31,7 @@ def analyze_image(image_bytes: bytes, mime_type: str) -> str:
     try:
         if mime_type not in ALLOWED_IMAGE_TYPES:
             exts = [t.split('/')[1] for t in ALLOWED_IMAGE_TYPES if t != 'image/jpg']
-            return f"⚠️ Ingizo la picha la aina ya '{mime_type}' haliruhusiwi. Tumia moja ya: {', '.join(exts)}."
+            return f" Ingizo la picha la aina ya '{mime_type}' haliruhusiwi. Tumia moja ya: {', '.join(exts)}."
 
         image_part = Part.from_bytes(data=image_bytes, mime_type=mime_type)
         prompt = "Fafanua picha hii kwa lugha ya Kiswahili, usizidi herufi 400."
@@ -41,13 +41,13 @@ def analyze_image(image_bytes: bytes, mime_type: str) -> str:
             contents=[prompt, image_part],
         )
 
-        return response.text or "⚠️ Gemini haikurejesha maelezo yoyote."
+        return response.text or " Gemini haikurejesha maelezo yoyote."
 
     except APIError:
-        return "⚠️ Hitilafu ya API ya Gemini."
+        return " Hitilafu ya API ya Gemini."
     except Exception as e:
         logger.error(f"General Error analyzing image: {e}", exc_info=True)
-        return "⚠️ Hitilafu ya Jumla katika kuchambua picha."
+        return " Hitilafu ya Jumla katika kuchambua picha."
 
 
 
@@ -80,13 +80,13 @@ def analyze_file_with_gemini(file_data: bytes, filename: str) -> str:
        )
         result_text = getattr(response, "text", None)
         if not result_text:
-         return "⚠️ Gemini haikurejesha maelezo yoyote."
+         return " Gemini haikurejesha maelezo yoyote."
 
         return result_text
 
     except APIError as e:
         logger.error(f"Gemini API Error: {e}", exc_info=True)
-        return "⚠️ Hitilafu ya API ya Gemini: Udadisi wa nyaraka umeshindwa."
+        return " Hitilafu ya API ya Gemini: Udadisi wa nyaraka umeshindwa."
     except Exception as e:
         logger.exception(f"General Error during Gemini PDF analysis: {e}")
-        return f"⚠️ Hitilafu ya Jumla katika kuchambua faili '{filename}'. Tafadhali jaribu tena."
+        return f" Hitilafu ya Jumla katika kuchambua faili '{filename}'. Tafadhali jaribu tena."
