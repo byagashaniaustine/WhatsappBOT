@@ -4,7 +4,7 @@ import requests
 import uuid 
 import os # Import necessary for environment variable access
 from typing import Optional
-from services.supabase import store_file
+from services.supabase import store_file 
 from services.gemini import analyze_image
 from services.pdfendpoint import analyze_pdf
 from services.meta import send_meta_whatsapp_message # REKEBISHO: Kutoka Twilio kwenda Meta
