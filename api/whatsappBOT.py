@@ -27,19 +27,14 @@ main_menu = {
             "historia ya ulipaji na uaminifu wa kifedha.\n\n"
 
             "📊 *Manka Affordability Score* inaonyesha kiwango cha mkopo unachoweza kuchukua:\n"
-            "• 🔼 *Score ya Juu* — Inaonyesha uwezo mkubwa. Hapa unaweza kukopeshwa kiasi kikubwa.\n"
-            "• 🟡 *Score ya Kati (Moderate)* — Una uwezo wa wastani. Hapa unaweza kuchukua mkopo wa kawaida, sio mdogo sana wala sio mkubwa sana.\n"
-            "• 🔽 *Score ya Chini* — Hiki ndicho kiwango cha chini cha mkopo ambacho ni salama kuanzia.\n\n"
-
-            "➡️ Kwa lugha nyepesi:\n"
-            "• Score ya juu = unaweza kubeba mzigo mkubwa wa mkopo bila kuteseka.\n"
-            "• Score ya kati = unaweza kubeba mkopo wa kiwango cha kati bila shida.\n"
-            "• Score ya chini = ni salama kuanza na mkopo mdogo ili usipate presha ya malipo.\n\n"
+            "• 🔼 *Score ya Juu* — Kiwango kinachoonesha kiasi chako cha juu unachoweza kukopa.\n"
+            "• 🟡 *Score ya Kati (Moderate)* — Kiwango kinachoonesha kiasi chako cha kati unachoweza kukopa sio mdogo sana wala sio mkubwa sana.\n"
+            "• 🔽 *Score ya Chini* — Hiki ndicho kiwango cha chini unachoweza kuchukua mkopo ambacho ni salama kuanzia.\n\n"
 
             "⚠️ *Ushauri:* Tunashauri uanze na kiwango cha chini ili ujenge historia nzuri ya ulipaji. "
             "Kadri unavyolipa kwa wakati, score inaongezeka na unaweza kukopa zaidi.\n\n"
 
-            "📄 Sasa tuma PDF au picha za nyaraka zako (NIDA, salary slip, mkataba, au bank statement) "
+            "📄 Sasa tuma faili la PDF za nyaraka zako ( salary slip au bank statement) zisizopungua miezi mitatu "
             "ili tukadirie score yako na kujua kiwango chako halisi cha mkopo."
         )
     },
