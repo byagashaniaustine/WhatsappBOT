@@ -8,8 +8,6 @@ from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
-# --- Flow Handlers ---
-from api.whatsappBOT import process_loan_calculator_flow, process_nakopesheka_flow
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
@@ -96,24 +94,6 @@ async def whatsapp_webhook(request: Request):
 
             logger.info(f"📎 File processed for {from_number}: {result}")
             send_meta_whatsapp_message(from_number, "✅ Faili lako limepokelewa, linafanyiwa uchambuzi.")
-
-        # ------------------------------
-        # 🟡 FLOW SUBMISSION (Loan/Nakopesheka)
-        # ------------------------------
-        elif message_type == "interactive" and message.get("interactive", {}).get("type") == "flow_reply":
-            interactive_data = message["interactive"]
-            flow_id = interactive_data.get("flow_id")
-            form_data = interactive_data.get("response", {}).get("form_data", {})
-
-            logger.info(f"🧾 Flow submission from {from_number} (Flow ID: {flow_id}) — Data: {form_data}")
-
-            # Distinguish which flow
-            if flow_id == "1623606141936116":  # Loan Calculator Flow ID
-                await process_loan_calculator_flow(from_number, form_data)
-            elif flow_id == "760682547026386":  # Nakopesheka Flow ID
-                await process_nakopesheka_flow(from_number, form_data)
-            else:
-                send_meta_whatsapp_message(from_number, "⚠️ Flow is not recognized.")
 
         # ------------------------------
         # ❌ UNKNOWN MESSAGE TYPE
