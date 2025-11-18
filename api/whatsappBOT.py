@@ -31,7 +31,7 @@ main_menu = {
             "• *Score ya Chini* — Hiki ndicho kiwango cha chini unachoweza kuchukua mkopo ambacho ni salama kuanzia.\n\n"
 
             " *Ushauri:* Tunashauri uanze na kiwango cha chini ili ujenge historia nzuri ya ulipaji. "
-            "Kadri unavyolipa kwa wakati, score inaongezeka na unaweza kukopa zaidi.\n\n"
+            "Kadri unavyolipa kwa wakati, score inaongezeka na unaweza kukopa zaidi na zaidi.\n\n"
 
             " Sasa tuma faili la PDF za nyaraka zako ( salary slip au bank statement) zisizopungua miezi mitatu "
             "ili tukadirie score yako na kujua kiwango chako halisi cha mkopo."
