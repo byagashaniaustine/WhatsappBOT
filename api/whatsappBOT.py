@@ -74,7 +74,8 @@ main_menu = {
         
         "1️ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
         "2️ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
-        "3️ **Cash by Car Card kupitia Kibungo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
+        "3️ **Cash by Car Card kupitia Kimondo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
+        "4️*Bima / Insurance by K.finance* – Pata huduma za bima kupitia *K.Finance*.\n\n"
         " *Kila huduma ina masharti yake maalumu, riba, na muda wa malipo. Hakikisha unakagua masharti kabla ya kukopa."
         )
     }
@@ -98,6 +99,9 @@ def calculate_monthly_payment(principal: float, months: int, annual_rate_percent
 # ---------------------------------
 # MAIN MENU HANDLER
 # ---------------------------------
+# ---------------------------------
+# MAIN MENU HANDLER (Loan Calc with Riba Type)
+# ---------------------------------
 async def whatsapp_menu(data: dict):
     try:
         from_number = str(data.get("From") or "")
@@ -105,42 +109,61 @@ async def whatsapp_menu(data: dict):
             from_number = "+" + from_number
 
         incoming_msg = str(data.get("Body") or "").strip().lower()
+        state = user_states.get(from_number)
 
-        # --- LOAN CALCULATOR MODE ---
-        if user_states.get(from_number, {}).get("mode") == "LOAN_CALC":
-            state = user_states[from_number]
+        if state and state.get("mode") == "LOAN_CALC":
             step = state["step"]
             collected = state["data"]
 
             try:
                 if step == 1:
                     collected["principal"] = float(incoming_msg)
-                    user_states[from_number]["step"] = 2
-                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza muda wa mkopo kwa miezi:")
+                    state["step"] = 2
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza muda wa mkopo (idadi ya siku/ wiki/ miezi):")
                 elif step == 2:
-                    collected["months"] = int(incoming_msg)
-                    user_states[from_number]["step"] = 3
-                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza riba ya mwaka (%):")
+                    collected["duration"] = int(incoming_msg)
+                    state["step"] = 3
+                    send_meta_whatsapp_message(
+                        from_number,
+                        "Chagua aina ya riba:\n1️⃣ Riba ya Siku\n2️⃣ Riba ya Wiki\n3️⃣ Riba ya Mwezi"
+                    )
                 elif step == 3:
+                    if incoming_msg not in ["1", "2", "3"]:
+                        send_meta_whatsapp_message(from_number, "❌ Tafadhali chagua 1, 2, au 3.")
+                        return PlainTextResponse("OK")
+                    collected["riba_type"] = int(incoming_msg)
+                    state["step"] = 4
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza riba ya %:")
+                elif step == 4:
                     collected["rate"] = float(incoming_msg)
 
                     P = collected["principal"]
-                    n = collected["months"]
+                    t = collected["duration"]
                     r = collected["rate"]
+                    riba_type = collected["riba_type"]
 
-                    monthly_payment = calculate_monthly_payment(P, n, r)
+                    # calculate based on type
+                    if riba_type == 1:  # daily
+                        total_payment = P + (P * r/100 * t/30)
+                        unit = "siku"
+                    elif riba_type == 2:  # weekly
+                        total_payment = P + (P * r/100 * t/4)
+                        unit = "wiki"
+                    else:  # monthly
+                        total_payment = P + (P * r/100 * t)
+                        unit = "miezi"
 
                     message = (
-                        f" *Matokeo ya Kikokotoo cha Mkopo*\n\n"
+                        f"💰 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
                         f"Kiasi cha mkopo: Tsh {P:,.0f}\n"
-                        f"Muda: {n} miezi\n"
-                        f"Riba ya mwaka: {r}%\n\n"
-                        f"Kiasi cha kulipa kila mwezi: Tsh {monthly_payment:,.0f}"
+                        f"Muda: {t} {unit}\n"
+                        f"Riba: {r}%\n\n"
+                        f"Kiasi cha kulipa jumla: Tsh {total_payment:,.0f}"
                     )
-
                     send_meta_whatsapp_message(from_number, message)
-                    user_states.pop(from_number)
-                    return PlainTextResponse("OK")  # <-- this ensures the function stops here
+                    user_states.pop(from_number)  # exit state
+                    return PlainTextResponse("OK")
+
             except ValueError:
                 send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.")
             return PlainTextResponse("OK")
@@ -148,13 +171,13 @@ async def whatsapp_menu(data: dict):
         # --- MAIN MENU TRIGGERS ---
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
             menu_list = "\n".join([f"*{key}* - {value['title']}" for key, value in main_menu.items()])
-            reply = f" *Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
+            reply = f"*Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
             send_meta_whatsapp_message(from_number, reply)
             return PlainTextResponse("OK")
 
         # --- USER SELECTION ---
         if incoming_msg in main_menu:
-            if incoming_msg == "4":  # start loan calculator mode
+            if incoming_msg == "4":  # Kikokotoo cha Mkopo
                 user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
                 send_meta_whatsapp_message(from_number, "Karibu kwenye Kikokotoo cha Mkopo!\nTafadhali ingiza kiasi unachotaka kukopa (Tsh):")
                 return PlainTextResponse("OK")
@@ -164,10 +187,10 @@ async def whatsapp_menu(data: dict):
                 return PlainTextResponse("OK")
 
         # --- UNKNOWN INPUT ---
-        send_meta_whatsapp_message(from_number, " Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.")
+        send_meta_whatsapp_message(from_number, "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.")
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f" Error in whatsapp_menu: {e}")
-        send_meta_whatsapp_message(from_number, " Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.")
+        logger.exception(f"❌ Error in whatsapp_menu: {e}")
+        send_meta_whatsapp_message(from_number, "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.")
         return PlainTextResponse("Internal Server Error", status_code=500)
