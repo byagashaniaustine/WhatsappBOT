@@ -111,8 +111,8 @@ async def whatsapp_menu(data: dict):
                     )
 
                     send_meta_whatsapp_message(from_number, message)
-                    user_states.pop(from_number)  # reset state
-
+                    user_states.pop(from_number)
+                    return PlainTextResponse("OK")  # <-- this ensures the function stops here
             except ValueError:
                 send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.")
             return PlainTextResponse("OK")
