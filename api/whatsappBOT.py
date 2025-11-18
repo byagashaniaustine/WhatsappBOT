@@ -177,7 +177,7 @@ async def whatsapp_menu(data: dict):
         # -------------------------
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
             menu_list = "\n".join([f"*{k}* - {v['title']}" for k, v in main_menu.items()])
-            reply = f"👋 *Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
+            reply = f"*Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
             send_meta_whatsapp_message(from_number, reply)
             return PlainTextResponse("OK")
 
