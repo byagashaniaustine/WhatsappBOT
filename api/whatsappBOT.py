@@ -43,14 +43,42 @@ main_menu = {
         "title": "Kikokotoo cha Mkopo (Loan Calculator)",
         "description": "Tumia kikokotoo kujua kiasi utakacholipa kila mwezi kulingana na mkopo, muda, na riba."
     },
+
     "5": {
-        "title": "Aina za Mikopo kulingana na Riba",
-        "description": "Mikopo inaweza kuwa na riba ya kudumu au inayobadilika. Riba ya kudumu inamaanisha malipo yako ya kila mwezi hayabadiliki. Riba inayobadilika inaweza kupanda au kushuka kulingana na hali ya soko."
+        "title": "Aina za Mikopo",
+        "description": (
+        "Mikopo inaweza kugawanywa kwa aina mbalimbali kulingana na riba, malipo, na madhumuni:\n\n"
+
+        "1️⃣ *Mikopo kwa Riba*:\n"
+        "   • *Riba ya Kudumu (Fixed Interest)* – Kiasi unacholipa kila mwezi hakibadiliki kwa muda wote wa mkopo.\n"
+        "   • *Riba Inayobadilika (Variable Interest)* – Kiasi unacholipa kinaweza kupanda au kushuka kulingana na mabadiliko ya soko.\n\n"
+
+        "2️⃣ *Mikopo kwa Awamu (Installment Loans)*:\n"
+        "   • Malipo ya Kila Mwezi – Una malipo ya kila mwezi yaliyopangwa.\n"
+        "   • Malipo ya Robo Mwaka au Mwaka – Malipo yapangwa kila robo au mwaka.\n\n"
+
+        "3️⃣ *Mikopo ya Kawaida / Standard Loans*:\n"
+        "   • Mikopo ya kawaida inayotolewa na benki au taasisi, yenye riba iliyoainishwa na muda maalumu.\n\n"
+
+        "4️⃣ *Mikopo ya Haraka / Midogo (Quick Loans / Microloans)*:\n"
+        "   • Mikopo midogo, mara nyingi mtandaoni, kwa masharti rahisi na malipo ya haraka.\n\n"
+
+        "⚠️ Kila aina ina masharti yake, riba tofauti, na faida/hatari zake. Ni muhimu kuelewa aina ya mkopo unaochukua ili kuepuka matatizo ya kifedha."
+        )
     },
+
     "6": {
         "title": "Huduma za Mikopo za Manka",
-        "description": "Manka inakuletea aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe."
+        "description": (
+        "Manka inakuletea aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe:\n\n"
+        
+        "1️⃣ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
+        "2️⃣ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
+        "3️⃣ **Cash by Car Card kupitia Kibungo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
+        "⚠️ Kila huduma ina masharti yake maalumu, riba, na muda wa malipo. Hakikisha unakagua masharti kabla ya kukopa."
+        )
     }
+
 }
 
 # ---------------------------------
