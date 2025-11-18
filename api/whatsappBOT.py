@@ -143,7 +143,7 @@ async def whatsapp_menu(data: dict):
                         return PlainTextResponse("OK")
                     collected["riba_type"] = int(incoming_msg)
                     state["step"] = 4
-                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza riba ya %:")
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza asimilia za riba ya %:")
                 elif step == 4:
                     collected["rate"] = float(incoming_msg)
 
