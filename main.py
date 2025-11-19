@@ -1,9 +1,8 @@
 import logging
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 
-# --- Existing Imports ---
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
@@ -13,36 +12,23 @@ logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 app = FastAPI()
 
-# --- CONFIG ---
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "YOUR_SECRET_TOKEN_HERE")
 
-# ------------------------------
-# 1️⃣ WEBHOOK VERIFICATION
-# ------------------------------
+
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
-    try:
-        mode = request.query_params.get("hub.mode")
-        token = request.query_params.get("hub.verify_token")
-        challenge = request.query_params.get("hub.challenge")
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
 
-        if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-            logger.info("✅ Webhook verified successfully!")
-            return PlainTextResponse(challenge)
+    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+        return PlainTextResponse(challenge)
 
-        logger.warning("⚠️ Webhook verification failed.")
-        raise HTTPException(status_code=403, detail="Verification failed.")
-
-    except Exception as e:
-        logger.error(f"❌ Error error during webhook verification: {e}")
-        raise HTTPException(status_code=403, detail="Webhook verification error.")
+    raise HTTPException(status_code=403, detail="Verification failed")
 
 
-# ------------------------------
-# 2️⃣ INCOMING MESSAGE HANDLER
-# ------------------------------
 @app.post("/whatsapp-webhook/")
-async def whatsapp_webhook(request: Request):
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
         entry = payload.get("entry", [{}])[0]
@@ -51,61 +37,77 @@ async def whatsapp_webhook(request: Request):
         messages = value.get("messages", [])
 
         if not messages:
-            logger.info("No message content — ignoring.")
             return PlainTextResponse("OK")
 
         message = messages[0]
         from_number = message.get("from")
-        message_type = message.get("type")
+        msg_type = message.get("type")
 
         if not from_number:
             return PlainTextResponse("OK")
 
-        # ------------------------------
-        # 🟢 TEXT MESSAGE
-        # ------------------------------
-        if message_type == "text":
-            text_body = message.get("text", {}).get("body", "")
-            payload = {"From": from_number, "Body": text_body}
-            logger.info(f"💬 Text message from {from_number}: {text_body}")
-            await whatsapp_menu(payload)
 
-        # ------------------------------
-        # 🟣 MEDIA UPLOAD
-        # ------------------------------
-        elif message_type in ["image", "document", "audio", "video"]:
-            media_data = message.get(message_type, {})
+        if msg_type == "text":
+            user_text = message.get("text", {}).get("body", "")
+            logger.info(f"💬 Message from {from_number}: {user_text}")
+
+            # Process text in BACKGROUND
+            background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
+
+            # Respond immediately to Meta
+            return PlainTextResponse("OK")
+
+
+        if msg_type in ["image", "document", "audio", "video"]:
+            media_data = message.get(msg_type, {})
             media_id = media_data.get("id")
             mime_type = media_data.get("mime_type")
 
             if not media_id:
-                send_meta_whatsapp_message(from_number, "Samahani, faili halikupatikana.")
+                background_tasks.add_task(
+                    send_meta_whatsapp_message,
+                    from_number,
+                    "Samahani, faili halikupatikana."
+                )
                 return PlainTextResponse("OK")
 
-            actual_media_url = get_media_url(media_id)
-            result = process_file_upload(
-                user_id=from_number,
-                user_name="",
-                user_phone=from_number,
-                flow_type="whatsapp_upload",
-                media_url=actual_media_url,
-                mime_type=mime_type
-            )
-
-            logger.info(f"📎 File processed for {from_number}: {result}")
-            send_meta_whatsapp_message(from_number, " Faili lako limepokelewa, linafanyiwa uchambuzi.")
-
-        # ------------------------------
-        # ❌ UNKNOWN MESSAGE TYPE
-        # ------------------------------
-        else:
-            send_meta_whatsapp_message(
+            # Notify user IMMEDIATELY
+            background_tasks.add_task(
+                send_meta_whatsapp_message,
                 from_number,
-                f"Haiwezi kushughulikia ujumbe wa aina '{message_type}'."
+                "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
             )
 
+            # Continue processing in BACKGROUND
+            def process_job():
+                media_url = get_media_url(media_id)
+                result = process_file_upload(
+                    user_id=from_number,
+                    user_name="",
+                    user_phone=from_number,
+                    flow_type="whatsapp_upload",
+                    media_url=media_url,
+                    mime_type=mime_type
+                )
+
+                # Notify after completion
+                send_meta_whatsapp_message(
+                    from_number,
+                    "✅ *Uchambuzi wa faili umekamilika.*\nTutakujulisha hatua inayofuata."
+                )
+
+            background_tasks.add_task(process_job)
+
+            return PlainTextResponse("OK")
+
+
+        background_tasks.add_task(
+            send_meta_whatsapp_message,
+            from_number,
+            f"Samahani, siwezi kusoma ujumbe wa aina: {msg_type}"
+        )
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"❌ WhatsApp webhook error: {e}")
+        logger.exception(f"Webhook Error: {e}")
         return PlainTextResponse("Internal Server Error", status_code=500)
