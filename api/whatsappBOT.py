@@ -67,9 +67,9 @@ main_menu = {
     },
 
     "6": {
-        "title": "Huduma za Mikopo za Manka",
+        "title": "Huduma za Mikopo",
         "description": (
-        "Manka inakuletea aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe:\n\n"
+        "Kuna huduma za aina mbalimbali za mikopo zinazokusaidia kukamilisha mahitaji yako ya kila siku na miradi midogo. Huduma hizi ni rahisi, haraka, na karibu nawe:\n\n"
         
         "1️ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
         "2️ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
