@@ -93,7 +93,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 # Notify after completion
                 send_meta_whatsapp_message(
                     from_number,
-                    "✅ *Uchambuzi wa faili umekamilika.*\nTutakujulisha hatua inayofuata."
+                    "✅ *Uchambuzi wa faili umekamilika.*\nAsante kwa kuchagua huduma zetu."
                 )
 
             background_tasks.add_task(process_job)
