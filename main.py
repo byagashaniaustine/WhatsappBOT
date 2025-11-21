@@ -1,10 +1,10 @@
-import logging
 import os
-import base64
 import json
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+import base64
+import logging
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.responses import PlainTextResponse
-from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 
 from api.whatsappBOT import whatsapp_menu
@@ -18,7 +18,7 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# Load RSA private key from environment variable
+# Load private key from env variable
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set")
@@ -27,9 +27,12 @@ private_key_str = private_key_str.replace("\\n", "\n")
 PRIVATE_KEY = RSA.import_key(private_key_str)
 RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
 
-# ----------------------------
-# Webhook Verification
-# ----------------------------
+def unpad_pkcs7(data: bytes) -> bytes:
+    pad_len = data[-1]
+    if pad_len < 1 or pad_len > 16:
+        raise ValueError("Invalid PKCS7 padding")
+    return data[:-pad_len]
+
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
@@ -38,57 +41,36 @@ async def verify_webhook(request: Request):
 
     if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
         return PlainTextResponse(challenge)
-
     raise HTTPException(status_code=403, detail="Verification failed")
 
-# ----------------------------
-# Webhook Handler
-# ----------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
 
-        # Encrypted flow
-        encrypted_b64 = (
-            payload.get("entry", [{}])[0]
-                   .get("changes", [{}])[0]
-                   .get("value", {})
-                   .get("encrypted_flow_data")
-        )
-        encrypted_aes_key_b64 = (
-            payload.get("entry", [{}])[0]
-                   .get("changes", [{}])[0]
-                   .get("value", {})
-                   .get("encrypted_aes_key")
-        )
-        iv_b64 = (
-            payload.get("entry", [{}])[0]
-                   .get("changes", [{}])[0]
-                   .get("value", {})
-                   .get("initial_vector")
-        )
+        encrypted_b64 = payload.get("encrypted_flow_data")
+        encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
+        iv_b64 = payload.get("initial_vector")
 
         if encrypted_b64 and encrypted_aes_key_b64 and iv_b64:
             try:
-                # 1️⃣ Decrypt AES key with RSA
-                aes_key = RSA_CIPHER.decrypt(base64.b64decode(encrypted_aes_key_b64))
+                # Decode RSA-encrypted AES key
+                encrypted_aes_key = base64.b64decode(encrypted_aes_key_b64)
+                aes_key = RSA_CIPHER.decrypt(encrypted_aes_key)
 
-                # 2️⃣ Decode IV and ciphertext
+                # Decode AES-CBC IV and ciphertext
                 iv = base64.b64decode(iv_b64)
                 ciphertext = base64.b64decode(encrypted_b64)
 
-                # 3️⃣ Decrypt with AES-CBC
-                aes_cipher = AES.new(aes_key, AES.MODE_CBC, iv)
-                decrypted_bytes = aes_cipher.decrypt(ciphertext)
-
-                # 4️⃣ Remove PKCS7 padding
-                pad_len = decrypted_bytes[-1]
-                decrypted_bytes = decrypted_bytes[:-pad_len]
+                # Decrypt AES-CBC
+                cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
+                decrypted_bytes = cipher_aes.decrypt(ciphertext)
+                decrypted_bytes = unpad_pkcs7(decrypted_bytes)
 
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
                 logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
 
+                # Forward to normal WhatsApp flow
                 from_number = decrypted_data.get("From")
                 user_text = decrypted_data.get("Body")
 
@@ -101,9 +83,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 logger.exception(f"Flow Decryption Error: {e}")
                 return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
 
-        # ----------------------------
-        # Regular WhatsApp message processing
-        # ----------------------------
+        # Fallback: normal WhatsApp message processing
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
