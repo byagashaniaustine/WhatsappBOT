@@ -104,7 +104,8 @@ def calculate_monthly_payment(principal: float, duration: int, rate_percent: flo
     return total_payment / months
 
 # ---------------------------------
-# MAIN MENU HANDLER
+# MAIN MENU HANDLER# ---------------------------------
+# MAIN MENU HANDLER WITH SURVEY TEMPLATE
 # ---------------------------------
 async def whatsapp_menu(data: dict):
     try:
@@ -185,6 +186,40 @@ async def whatsapp_menu(data: dict):
                 user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
                 send_meta_whatsapp_message(from_number, "Karibu kwenye Kikokotoo cha Mkopo!\nTafadhali ingiza kiasi unachotaka kukopa (Tsh):")
                 return PlainTextResponse("OK")
+
+            elif incoming_msg == "3":  # Nakopesheka!! -> send survey template
+                template_payload = {
+                    "messaging_product": "whatsapp",
+                    "to": from_number,
+                    "type": "template",
+                    "template": {
+                        "name": "survey_ask",
+                        "language": {"code": "en_US"},
+                        "components": [
+                            {
+                                "type": "body",
+                                "parameters": [
+                                    {"type": "text", "text": "Please help us fill-in our survey. Press a button below to start."}
+                                ]
+                            },
+                            {
+                                "type": "button",
+                                "sub_type": "quick_reply",
+                                "index": 0,
+                                "parameters": [{"type": "text", "text": "Start Survey"}]
+                            },
+                            {
+                                "type": "button",
+                                "sub_type": "quick_reply",
+                                "index": 1,
+                                "parameters": [{"type": "text", "text": "Maybe Later"}]
+                            }
+                        ]
+                    }
+                }
+                send_meta_whatsapp_message(from_number, template_payload=template_payload)
+                return PlainTextResponse("OK")
+
             else:
                 item = main_menu[incoming_msg]
                 send_meta_whatsapp_message(from_number, f"*{item['title']}*\n\n{item['description']}")
