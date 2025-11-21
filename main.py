@@ -53,6 +53,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
        
+        logger.info(f"Received webhook payload: {payload.get("encrypted_flow_data") is not None and 'encrypted flow data present' or 'no encrypted flow data'}"
+                    f"{payload.get("encrypted_aes_key") is not None and ', encrypted aes key present' or ', no encrypted aes key'}"
+                    f"{payload.get("initial_vector") is not None and ', iv present' or ', no iv'}")
         
         if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
             try:
@@ -80,7 +83,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
             except Exception as e:
                 logger.exception(f"Flow Decryption Error: {e}")
-                logger.info(f"{encrypted_aes_key_bytes},{iv},{encrypted_flow_bytes}")
+                logger.info(f"{aes_key},{iv},{encrypted_flow_bytes},{cipher_aes}")
                 return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
 
         # ---- Regular WhatsApp message ----
