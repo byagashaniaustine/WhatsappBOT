@@ -6,48 +6,31 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from Crypto.Cipher import AES  # pip install pycryptodome
 
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
-# --------------------------
-# Logging Setup
-# --------------------------
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
-# --------------------------
-# FastAPI App
-# --------------------------
 app = FastAPI()
 
-# --------------------------
-# Environment Variables
-# --------------------------
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
-PRIVATE_KEY_STR = os.environ.get("PRIVATE_KEY")
 
-if not PRIVATE_KEY_STR:
+# Load private key from environment variable
+private_key_str = os.environ.get("PRIVATE_KEY")
+if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set")
 
-# Convert escaped newlines to real newlines for PEM parsing
-PRIVATE_KEY_STR = PRIVATE_KEY_STR.replace("\\n", "\n").strip()
+# Replace escaped newlines with actual newlines
+private_key_str = private_key_str.replace("\\n", "\n").strip()
 PRIVATE_KEY = serialization.load_pem_private_key(
-    PRIVATE_KEY_STR.encode("utf-8"),
+    private_key_str.encode("utf-8"),
     password=None
 )
 
-# --------------------------
-# Health Check Endpoint
-# --------------------------
-@app.get("/health")
-async def health_check():
-    return PlainTextResponse("OK")
-
-# --------------------------
-# Webhook Verification
-# --------------------------
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
@@ -59,47 +42,65 @@ async def verify_webhook(request: Request):
 
     raise HTTPException(status_code=403, detail="Verification failed")
 
-# --------------------------
-# Webhook Handler
-# --------------------------
+
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
 
-        # Check for encrypted payload (Flow)
-        encrypted_b64 = (
-            payload.get("entry", [{}])[0]
-                   .get("changes", [{}])[0]
-                   .get("value", {})
-                   .get("encrypted_payload")
+        # 1️⃣ Check for encrypted flow payload
+        encrypted_flow_data = (
+            payload.get("encrypted_flow_data")
+        )
+        encrypted_aes_key = (
+            payload.get("encrypted_aes_key")
+        )
+        initial_vector = (
+            payload.get("initial_vector")
         )
 
-        if encrypted_b64:
+        if encrypted_flow_data and encrypted_aes_key and initial_vector:
             try:
-                encrypted_bytes = base64.b64decode(encrypted_b64)
-                decrypted_bytes = PRIVATE_KEY.decrypt(
-                    encrypted_bytes,
+                # 2️⃣ Decrypt AES key using RSA
+                aes_key = PRIVATE_KEY.decrypt(
+                    base64.b64decode(encrypted_aes_key),
                     padding.OAEP(
                         mgf=padding.MGF1(algorithm=hashes.SHA256()),
                         algorithm=hashes.SHA256(),
                         label=None
                     )
                 )
-                decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
-                logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
 
-                from_number = decrypted_data.get("From")
-                user_text = decrypted_data.get("Body")
+                # 3️⃣ Decode IV
+                iv = base64.b64decode(initial_vector)
+
+                # 4️⃣ Decrypt flow data using AES-CBC
+                cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+                encrypted_bytes = base64.b64decode(encrypted_flow_data)
+                decrypted_bytes = cipher.decrypt(encrypted_bytes)
+
+                # 5️⃣ Remove PKCS7 padding
+                padding_len = decrypted_bytes[-1]
+                decrypted_bytes = decrypted_bytes[:-padding_len]
+
+                # 6️⃣ Convert to JSON
+                decrypted_json = json.loads(decrypted_bytes.decode("utf-8"))
+                logger.info(f"📥 Decrypted Flow Data: {decrypted_json}")
+
+                # 7️⃣ Pass decrypted data to your flow handler
+                from_number = decrypted_json.get("From")
+                user_text = decrypted_json.get("Body")
                 if from_number and user_text:
-                    background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
+                    background_tasks.add_task(
+                        whatsapp_menu, {"From": from_number, "Body": user_text}
+                    )
 
                 return PlainTextResponse("OK")
             except Exception as e:
                 logger.exception(f"Flow Decryption Error: {e}")
                 return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
 
-        # Normal WhatsApp message processing
+        # 8️⃣ Fallback: regular WhatsApp messages
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -141,7 +142,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
             )
 
-            # Process in background
+            # Continue processing in background
             def process_job():
                 media_url = get_media_url(media_id)
                 process_file_upload(
