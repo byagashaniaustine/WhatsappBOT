@@ -7,29 +7,39 @@ from fastapi.responses import PlainTextResponse
 
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Hash import SHA256
 
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
+# -----------------------------
+# Logging
+# -----------------------------
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
+# -----------------------------
+# FastAPI app
+# -----------------------------
 app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# Load RSA private key from environment
+# -----------------------------
+# Load RSA private key
+# -----------------------------
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set")
 
-# Replace escaped newlines with real newlines
 private_key_str = private_key_str.replace("\\n", "\n")
 PRIVATE_KEY = RSA.import_key(private_key_str)
-RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
+RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
 
-
+# -----------------------------
+# Webhook verification
+# -----------------------------
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
@@ -41,46 +51,47 @@ async def verify_webhook(request: Request):
 
     raise HTTPException(status_code=403, detail="Verification failed")
 
-
+# -----------------------------
+# WhatsApp webhook
+# -----------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
+        logger.info(f"Webhook payload received: {json.dumps(payload)[:500]}...")  # truncate long payload
 
         # ---- Encrypted Flow Payload ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
 
-        logger.info(
-            f"Encrypted flow: {'present' if encrypted_flow_b64 else 'missing'}, "
-            f"AES key: {'present' if encrypted_aes_key_b64 else 'missing'}, "
-            f"IV: {'present' if iv_b64 else 'missing'}"
-        )
+        logger.info(f"Encrypted flow present: {bool(encrypted_flow_b64)}, AES key present: {bool(encrypted_aes_key_b64)}, IV present: {bool(iv_b64)}")
 
         if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
             try:
-                # 1️⃣ Decode AES key and decrypt it with RSA
+                # 1️⃣ Decrypt AES key with RSA-OAEP SHA256
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
+                logger.info(f"Encrypted AES key (base64): {encrypted_aes_key_b64}")
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
+                logger.info(f"Decrypted AES key: {aes_key.hex()}")
 
                 # 2️⃣ Decode IV and encrypted flow
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
-
-                # 3️⃣ Split ciphertext and GCM tag (last 16 bytes)
-                ciphertext = encrypted_flow_bytes[:-16]
                 tag = encrypted_flow_bytes[-16:]
+                ciphertext = encrypted_flow_bytes[:-16]
 
-                # 4️⃣ Decrypt using AES-GCM
-                cipher = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
-                decrypted_bytes = cipher.decrypt_and_verify(ciphertext, tag)
+                logger.info(f"IV (hex): {iv.hex()}")
+                logger.info(f"GCM tag (hex): {tag.hex()}")
+                logger.info(f"Ciphertext length: {len(ciphertext)} bytes")
 
-                # 5️⃣ Parse JSON
+                # 3️⃣ Decrypt AES-GCM
+                cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+                decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
-                logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
+                logger.info(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data)}")
 
-                # Handle user message
+                # Handle decrypted flow as if it was a normal message
                 from_number = decrypted_data.get("From")
                 user_text = decrypted_data.get("Body")
                 if from_number and user_text:
@@ -153,6 +164,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             background_tasks.add_task(process_job)
             return PlainTextResponse("OK")
 
+        # Unknown message type
         background_tasks.add_task(
             send_meta_whatsapp_message,
             from_number,
