@@ -7,7 +7,6 @@ from fastapi.responses import PlainTextResponse
 
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, AES
-from Crypto.Util.Padding import unpad
 
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
@@ -24,20 +23,11 @@ WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set")
+
+# Replace escaped newlines with real newlines
 private_key_str = private_key_str.replace("\\n", "\n")
 PRIVATE_KEY = RSA.import_key(private_key_str)
 RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
-
-
-def encrypt_response_base64(response: dict, aes_key: bytes, iv: bytes) -> str:
-    """
-    Encrypt response dict with AES-GCM and return base64 string.
-    """
-    cipher = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
-    plaintext = json.dumps(response).encode("utf-8")
-    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    result_bytes = ciphertext + tag
-    return base64.b64encode(result_bytes).decode("utf-8")
 
 
 @app.get("/whatsapp-webhook/")
@@ -56,54 +46,71 @@ async def verify_webhook(request: Request):
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
+
+        # ---- Encrypted Flow Payload ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
 
-        logger.info(f"Payload received. Encrypted flow present: {encrypted_flow_b64 is not None}, "
-                    f"AES key present: {encrypted_aes_key_b64 is not None}, "
-                    f"IV present: {iv_b64 is not None}")
+        logger.info(
+            f"Payload flags -> encrypted_flow_data: {encrypted_flow_b64 is not None}, "
+            f"encrypted_aes_key: {encrypted_aes_key_b64 is not None}, "
+            f"iv: {iv_b64 is not None}"
+        )
 
-        # ---- Encrypted Flow Handling ----
         if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
             try:
-                # 1️⃣ Decode and decrypt AES key
+                # 1️⃣ Decode and decrypt AES key with RSA
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
-                logger.info(f"Decrypted AES Key: {aes_key.hex()}")
+                logger.info(f"AES key (base64): {base64.b64encode(aes_key).decode()}")
 
                 # 2️⃣ Decode IV and encrypted flow
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
-                logger.info(f"IV: {iv.hex()} | Encrypted Flow Length: {len(encrypted_flow_bytes)} bytes")
 
-                # 3️⃣ Decrypt flow with AES-GCM
-                cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)  # If using CBC
-                decrypted_bytes = unpad(cipher_aes.decrypt(encrypted_flow_bytes), AES.block_size)
+                logger.info(f"IV (base64): {base64.b64encode(iv).decode()}")
+                logger.info(f"Encrypted flow length: {len(encrypted_flow_bytes)} bytes")
+
+                # 3️⃣ Split ciphertext and tag (last 16 bytes are GCM tag)
+                ciphertext = encrypted_flow_bytes[:-16]
+                tag = encrypted_flow_bytes[-16:]
+
+                logger.info(f"Ciphertext length: {len(ciphertext)}, Tag (base64): {base64.b64encode(tag).decode()}")
+
+                # 4️⃣ Decrypt AES-GCM
+                cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+                decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
-                logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
 
-                # Process the decrypted flow (example)
+                logger.info(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
+
+                # 5️⃣ Trigger WhatsApp menu processing
                 from_number = decrypted_data.get("From")
                 user_text = decrypted_data.get("Body")
                 if from_number and user_text:
                     background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
 
-                # Prepare response for Meta in base64 AES-GCM
-                response_payload = {
-                    "screen": "NEXT_SCREEN",
-                    "data": {"info": "Received your input"}
+                # 6️⃣ Return encrypted response in base64 (optional)
+                response = {
+                    "screen": "SCREEN_NAME",
+                    "data": {"some_key": "some_value"}
                 }
-                encrypted_response_b64 = encrypt_response_base64(response_payload, aes_key, iv)
-                logger.info(f"Encrypted Response (base64): {encrypted_response_b64}")
 
-                return PlainTextResponse(encrypted_response_b64, media_type="text/plain")
+                # Encrypt response using AES-GCM with flipped IV
+                flipped_iv = bytes([b ^ 0xFF for b in iv])
+                cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
+                encrypted_resp_bytes, resp_tag = cipher_resp.encrypt_and_digest(json.dumps(response).encode("utf-8"))
+                full_resp = encrypted_resp_bytes + resp_tag
+                full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
+
+                return PlainTextResponse(full_resp_b64)
 
             except Exception as e:
                 logger.exception(f"Flow Decryption Error: {e}")
                 return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
 
-        # ---- Regular WhatsApp messages ----
+        # ---- Regular WhatsApp message ----
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -115,6 +122,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         message = messages[0]
         from_number = message.get("from")
         msg_type = message.get("type")
+
         if not from_number:
             return PlainTextResponse("OK")
 
@@ -128,8 +136,13 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             media_data = message.get(msg_type, {})
             media_id = media_data.get("id")
             mime_type = media_data.get("mime_type")
+
             if not media_id:
-                background_tasks.add_task(send_meta_whatsapp_message, from_number, "Samahani, faili halikupatikana.")
+                background_tasks.add_task(
+                    send_meta_whatsapp_message,
+                    from_number,
+                    "Samahani, faili halikupatikana."
+                )
                 return PlainTextResponse("OK")
 
             # Notify user immediately
