@@ -11,25 +11,32 @@ from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
+# ---------------- Logging ----------------
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
+# ---------------- FastAPI App ----------------
 app = FastAPI()
 
+# ---------------- Config ----------------
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
 # Load private key from environment variable
-private_key_str = os.environ.get("PRIVATE_KEY")
+private_key_str = os.environ.get("PRIVATE_KEY", "").replace("\\n", "\n").strip()
 if not private_key_str:
-    raise RuntimeError("PRIVATE_KEY environment variable is not set")
-# Replace escaped newlines with actual newlines
-private_key_str = private_key_str.replace("\\n", "\n")
+    raise RuntimeError("PRIVATE_KEY environment variable is empty or not set")
+
 PRIVATE_KEY = serialization.load_pem_private_key(
     private_key_str.encode("utf-8"),
     password=None
 )
 
+# ---------------- Health Check ----------------
+@app.get("/health")
+async def health():
+    return PlainTextResponse("OK")
 
+# ---------------- Webhook Verification ----------------
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
@@ -41,13 +48,13 @@ async def verify_webhook(request: Request):
 
     raise HTTPException(status_code=403, detail="Verification failed")
 
-
+# ---------------- Webhook POST ----------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
 
-        # Check for encrypted flow payload
+        # ---------- Encrypted Flow Payload ----------
         encrypted_b64 = (
             payload.get("entry", [{}])[0]
                    .get("changes", [{}])[0]
@@ -69,7 +76,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
                 logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
 
-                # Process decrypted flow data like a normal text message
+                # Process decrypted flow like a normal text message
                 from_number = decrypted_data.get("From")
                 user_text = decrypted_data.get("Body")
 
@@ -81,7 +88,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 logger.exception(f"Flow Decryption Error: {e}")
                 return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
 
-        # Existing WhatsApp message processing
+        # ---------- Normal WhatsApp Messages ----------
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -97,12 +104,14 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         if not from_number:
             return PlainTextResponse("OK")
 
+        # ----- Text Messages -----
         if msg_type == "text":
             user_text = message.get("text", {}).get("body", "")
             logger.info(f"💬 Message from {from_number}: {user_text}")
             background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
             return PlainTextResponse("OK")
 
+        # ----- Media Messages -----
         if msg_type in ["image", "document", "audio", "video"]:
             media_data = message.get(msg_type, {})
             media_id = media_data.get("id")
@@ -123,25 +132,33 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
             )
 
-            # Continue processing in background
+            # Background processing
             def process_job():
-                media_url = get_media_url(media_id)
-                result = process_file_upload(
-                    user_id=from_number,
-                    user_name="",
-                    user_phone=from_number,
-                    flow_type="whatsapp_upload",
-                    media_url=media_url,
-                    mime_type=mime_type
-                )
-                send_meta_whatsapp_message(
-                    from_number,
-                    "✅ *Uchambuzi wa faili umekamilika.*\nAsante kwa kuchagua huduma zetu."
-                )
+                try:
+                    media_url = get_media_url(media_id)
+                    process_file_upload(
+                        user_id=from_number,
+                        user_name="",
+                        user_phone=from_number,
+                        flow_type="whatsapp_upload",
+                        media_url=media_url,
+                        mime_type=mime_type
+                    )
+                    send_meta_whatsapp_message(
+                        from_number,
+                        "✅ *Uchambuzi wa faili umekamilika.*\nAsante kwa kuchagua huduma zetu."
+                    )
+                except Exception as e:
+                    logger.exception(f"Background media processing error: {e}")
+                    send_meta_whatsapp_message(
+                        from_number,
+                        "❌ Kulikuwa na tatizo wakati wa uchambuzi wa faili."
+                    )
 
             background_tasks.add_task(process_job)
             return PlainTextResponse("OK")
 
+        # ----- Unsupported Message Type -----
         background_tasks.add_task(
             send_meta_whatsapp_message,
             from_number,
