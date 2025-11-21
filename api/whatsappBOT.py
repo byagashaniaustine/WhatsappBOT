@@ -5,9 +5,6 @@ from services.meta import send_meta_whatsapp_message
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
-# ---------------------------------
-# MAIN MENU
-# ---------------------------------
 main_menu = {
     "1": {
         "title": "Fahamu kuhusu Alama za Mikopo (Credit Score)",
@@ -73,7 +70,7 @@ main_menu = {
         
         "1️ **iPhone kupitia iStores** – Pata mkopo kununua simu mpya au vifaa vya Apple kupitia iStores zinazoshirikiana na Manka.\n\n"
         "2️ **Gari kupitia Fin Tanzania** – Pata mkopo wa gari la kibinafsi au la biashara kwa malipo ya awamu kupitia Fin Tanzania.\n\n"
-        "3️ **Cash by Car Card kupitia Kimondo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kibungo, kwa haraka na kwa masharti rahisi.\n\n"
+        "3️ **Cash by Car Card kupitia Kimondo** – Pata mkopo wa fedha taslimu kwa kutumia kadi ya gari (Car Card) kupitia Kimondo, kwa haraka na kwa masharti rahisi.\n\n"
         "4️*Bima / Insurance by K.finance* – Pata huduma za bima kupitia *K.Finance*.\n\n"
         " *Kila huduma ina masharti yake maalumu, riba, na muda wa malipo. Hakikisha unakagua masharti kabla ya kukopa."
         )

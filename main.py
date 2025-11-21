@@ -1,18 +1,33 @@
 import logging
 import os
+import base64
+import json
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
-
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
+
 app = FastAPI()
 
-WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "YOUR_SECRET_TOKEN_HERE")
+WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
+
+# Load private key from environment variable
+private_key_str = os.environ.get("PRIVATE_KEY")
+if not private_key_str:
+    raise RuntimeError("PRIVATE_KEY environment variable is not set")
+# Replace escaped newlines with actual newlines
+private_key_str = private_key_str.replace("\\n", "\n")
+PRIVATE_KEY = serialization.load_pem_private_key(
+    private_key_str.encode("utf-8"),
+    password=None
+)
 
 
 @app.get("/whatsapp-webhook/")
@@ -31,6 +46,42 @@ async def verify_webhook(request: Request):
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
+
+        # Check for encrypted flow payload
+        encrypted_b64 = (
+            payload.get("entry", [{}])[0]
+                   .get("changes", [{}])[0]
+                   .get("value", {})
+                   .get("encrypted_payload")
+        )
+
+        if encrypted_b64:
+            try:
+                encrypted_bytes = base64.b64decode(encrypted_b64)
+                decrypted_bytes = PRIVATE_KEY.decrypt(
+                    encrypted_bytes,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
+                decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
+                logger.info(f"📥 Decrypted Flow Data: {decrypted_data}")
+
+                # Process decrypted flow data like a normal text message
+                from_number = decrypted_data.get("From")
+                user_text = decrypted_data.get("Body")
+
+                if from_number and user_text:
+                    background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
+
+                return PlainTextResponse("OK")
+            except Exception as e:
+                logger.exception(f"Flow Decryption Error: {e}")
+                return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
+
+        # Existing WhatsApp message processing
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -46,17 +97,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         if not from_number:
             return PlainTextResponse("OK")
 
-
         if msg_type == "text":
             user_text = message.get("text", {}).get("body", "")
             logger.info(f"💬 Message from {from_number}: {user_text}")
-
-            # Process text in BACKGROUND
             background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
-
-            # Respond immediately to Meta
             return PlainTextResponse("OK")
-
 
         if msg_type in ["image", "document", "audio", "video"]:
             media_data = message.get(msg_type, {})
@@ -71,14 +116,14 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 )
                 return PlainTextResponse("OK")
 
-            # Notify user IMMEDIATELY
+            # Notify user immediately
             background_tasks.add_task(
                 send_meta_whatsapp_message,
                 from_number,
                 "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
             )
 
-            # Continue processing in BACKGROUND
+            # Continue processing in background
             def process_job():
                 media_url = get_media_url(media_id)
                 result = process_file_upload(
@@ -89,17 +134,13 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     media_url=media_url,
                     mime_type=mime_type
                 )
-
-                # Notify after completion
                 send_meta_whatsapp_message(
                     from_number,
                     "✅ *Uchambuzi wa faili umekamilika.*\nAsante kwa kuchagua huduma zetu."
                 )
 
             background_tasks.add_task(process_job)
-
             return PlainTextResponse("OK")
-
 
         background_tasks.add_task(
             send_meta_whatsapp_message,
