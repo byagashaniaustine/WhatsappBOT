@@ -52,7 +52,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
-
+       
+        logging.info(f"Received Encrypted Flow Payload: {payload.keys()}")
         if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
             try:
                 # 1️⃣ Decrypt AES key with RSA
