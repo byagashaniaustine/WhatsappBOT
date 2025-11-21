@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-from Crypto.Cipher import AES  
+from Crypto.Cipher import AES 
 
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
