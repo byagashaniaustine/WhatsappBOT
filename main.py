@@ -72,11 +72,12 @@ try:
     # 1. Use the robust loader
     PRIVATE_KEY = load_private_key(private_key_str)
     
-    # 2. Initialize the RSA Cipher using OAEP with SHA256 hash, as required by Meta Flows docs.
-    # PyCryptodome defaults to SHA-1, which causes decryption failure if Meta uses SHA256.
-    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256, mgf=PKCS1_OAEP.MGF1, MGF1Hash=SHA256)
+    # 2. Initialize the RSA Cipher using OAEP with SHA256 hash.
+    # We must only use 'hashAlgo=SHA256' as the additional 'mgf' arguments are not supported 
+    # in this version of PyCryptodome and caused the TypeError crash.
+    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
     
-    logger.info("RSA Cipher initialized with PKCS1_OAEP and SHA256 parameters.")
+    logger.info("RSA Cipher initialized with PKCS1_OAEP and SHA256 hashAlgo.")
     
     # --- CRITICAL DEBUG STEP: LOG PUBLIC KEY FOR VALIDATION ---
     public_key_pem = PRIVATE_KEY.publickey().export_key(format='PEM').decode('utf-8')
