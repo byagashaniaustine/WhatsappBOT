@@ -21,7 +21,8 @@ from services.meta import send_meta_whatsapp_message, get_media_url
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
-logger.setLevel(logging.INFO)
+# Set a lower level for detailed key debugging on startup
+logger.setLevel(logging.DEBUG) 
 
 app = FastAPI()
 
@@ -44,7 +45,14 @@ try:
     
     # 3. Initialize the RSA Cipher
     RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
+    
+    # --- CRITICAL DEBUG STEP: LOG PUBLIC KEY FOR VALIDATION ---
+    public_key_pem = PRIVATE_KEY.publickey().export_key(format='PEM').decode('utf-8')
     logger.info(f"RSA Private Key loaded successfully (Key Size: {PRIVATE_KEY.size_in_bytes() * 8} bits).")
+    logger.debug("\n\n--- VALIDATED PUBLIC KEY FROM PRIVATE KEY (MUST MATCH META'S KEY) ---")
+    logger.debug(public_key_pem)
+    logger.debug("----------------------------------------------------------------------\n")
+    
 
 except ValueError as e:
     logger.critical(f"FATAL: Failed to import RSA Private Key. Check formatting (BEGIN/END tags, base64 encoding, and presence of all newlines). Error: {e}")
@@ -103,6 +111,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         f"got {len(encrypted_aes_key_bytes)} bytes. Check key size and padding."
                     )
                 
+                # The actual RSA decryption
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
                 logger.info(f"✅ AES key successfully decrypted. Key length: {len(aes_key)} bytes.")
 
