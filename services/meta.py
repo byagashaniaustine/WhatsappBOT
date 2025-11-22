@@ -113,6 +113,60 @@ def send_meta_whatsapp_flow(
         raise RuntimeError(f"Meta Flow API call failed: {e}")
 
 # ==============================================================
+# SEND WHATSAPP TEMPLATE MESSAGE
+# ==============================================================
+def send_meta_whatsapp_template(
+    to: str,
+    template_name: str,
+    language_code: str = "en_US",
+    components: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Send a pre-approved WhatsApp template message via Meta API.
+
+    Args:
+        to (str): Recipient phone number in international format.
+        template_name (str): Name of the WhatsApp template configured in Meta Business.
+        language_code (str, optional): Language code for the template. Default is 'en_US'.
+        components (dict, optional): Optional template components (header, body, buttons).
+
+    Returns:
+        dict: Response from Meta API.
+    """
+    if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
+        raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language_code},
+        }
+    }
+
+    if components:
+        payload["template"]["components"] = components
+
+    try:
+        logger.info(f"🚀 Sending Template '{template_name}' to {to}")
+        response = requests.post(API_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        logger.info(f"✅ Template sent successfully to {to}. Response: {response.json()}")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        status_code = e.response.status_code if e.response else "N/A"
+        error_text = e.response.text if e.response else str(e)
+        logger.error(f"❌ WhatsApp Template API Error for {to} (Status {status_code}): {error_text}")
+        raise RuntimeError(f"Meta Template API call failed: {e}")
+
+# ==============================================================
 # GET MEDIA DOWNLOAD URL
 # ==============================================================
 def get_media_url(media_id: str) -> str:
