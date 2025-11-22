@@ -5,13 +5,21 @@ import logging
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP, AES
+# Import cryptography libraries
+try:
+    from Crypto.PublicKey import RSA
+    from Crypto.Cipher import PKCS1_OAEP, AES
+    from Crypto.Util.Padding import unpad # Not strictly needed for GCM, but good practice if mode changes
+except ImportError:
+    # A helpful message if the user forgot to install pycryptodome
+    raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
+# Assuming these modules exist in the user's project structure
 from api.whatsappBOT import whatsapp_menu
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
+# Setup logging
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
@@ -19,17 +27,35 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# Load RSA private key from environment
+# --- KEY LOADING AND SETUP ---
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
-    raise RuntimeError("PRIVATE_KEY environment variable is not set")
+    # This will still raise an error, but with a clearer message
+    raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
 
-# Replace escaped newlines with real newlines
-private_key_str = private_key_str.replace("\\n", "\n")
-PRIVATE_KEY = RSA.import_key(private_key_str)
-RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
+PRIVATE_KEY = None
+try:
+    # 1. Handle escaped newlines (the most common cause of failure)
+    private_key_str = private_key_str.replace("\\n", "\n")
+    logger.info("Attempting to load RSA private key from environment variable.")
+    
+    # 2. Import the key
+    PRIVATE_KEY = RSA.import_key(private_key_str)
+    
+    # 3. Initialize the RSA Cipher
+    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
+    logger.info(f"RSA Private Key loaded successfully (Key Size: {PRIVATE_KEY.size_in_bytes() * 8} bits).")
+
+except ValueError as e:
+    logger.critical(f"FATAL: Failed to import RSA Private Key. Check formatting (BEGIN/END tags, base64 encoding, and presence of all newlines). Error: {e}")
+    # Re-raise the error to stop the application from running with a broken key
+    raise RuntimeError(f"Key Import Error: {e}")
+except Exception as e:
+    logger.critical(f"FATAL: An unexpected error occurred during key setup: {e}")
+    raise
 
 
+# --- WEBHOOK VERIFICATION (GET) ---
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     mode = request.query_params.get("hub.mode")
@@ -42,44 +68,60 @@ async def verify_webhook(request: Request):
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
+# --- WEBHOOK HANDLER (POST) ---
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         payload = await request.json()
 
-        # ---- Encrypted Flow Payload ----
+        # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
 
+        is_flow_payload = encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64
+        
         logger.info(
-            f"Payload flags -> encrypted_flow_data: {encrypted_flow_b64 is not None}, "
+            f"Payload flags -> Flow data check: {is_flow_payload}, "
+            f"encrypted_flow_data: {encrypted_flow_b64 is not None}, "
             f"encrypted_aes_key: {encrypted_aes_key_b64 is not None}, "
             f"iv: {iv_b64 is not None}"
         )
 
-        if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
+        if is_flow_payload:
             try:
                 # 1️⃣ Decode and decrypt AES key with RSA
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
+                
+                # --- CRUCIAL DEBUG STEP ---
+                logger.debug(f"Encrypted AES Key Length: {len(encrypted_aes_key_bytes)} bytes")
+                
+                # Check if the length matches the RSA key size
+                if len(encrypted_aes_key_bytes) != PRIVATE_KEY.size_in_bytes():
+                    raise ValueError(
+                        f"Ciphertext length mismatch. Expected {PRIVATE_KEY.size_in_bytes()} bytes, "
+                        f"got {len(encrypted_aes_key_bytes)} bytes. Check key size and padding."
+                    )
+                
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
-                logger.info(f"AES key (base64): {base64.b64encode(aes_key).decode()}")
+                logger.info(f"✅ AES key successfully decrypted. Key length: {len(aes_key)} bytes.")
 
                 # 2️⃣ Decode IV and encrypted flow
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
 
-                logger.info(f"IV (base64): {base64.b64encode(iv).decode()}")
-                logger.info(f"Encrypted flow length: {len(encrypted_flow_bytes)} bytes")
+                logger.debug(f"IV length: {len(iv)} bytes. Encrypted flow length: {len(encrypted_flow_bytes)} bytes")
 
                 # 3️⃣ Split ciphertext and tag (last 16 bytes are GCM tag)
                 ciphertext = encrypted_flow_bytes[:-16]
                 tag = encrypted_flow_bytes[-16:]
 
-                logger.info(f"Ciphertext length: {len(ciphertext)}, Tag (base64): {base64.b64encode(tag).decode()}")
+                logger.debug(f"Ciphertext length: {len(ciphertext)}, Tag length: {len(tag)}")
 
                 # 4️⃣ Decrypt AES-GCM
                 cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+                
+                # This step can also fail if the AES key or IV is wrong, or the data is corrupted
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
@@ -89,28 +131,37 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 from_number = decrypted_data.get("From")
                 user_text = decrypted_data.get("Body")
                 if from_number and user_text:
+                    # Note: You might want to pass the whole decrypted_data object if other flow fields are needed
                     background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
 
                 # 6️⃣ Return encrypted response in base64 (optional)
                 response = {
-                    "screen": "SCREEN_NAME",
-                    "data": {"some_key": "some_value"}
+                    "screen": "RESPONSE_SCREEN_NAME", # Adjust screen name as needed
+                    "data": {"status": "success", "message": "Flow data processed."}
                 }
 
                 # Encrypt response using AES-GCM with flipped IV
-                flipped_iv = bytes([b ^ 0xFF for b in iv])
+                flipped_iv = bytes([b ^ 0xFF for b in iv]) # Standard practice for response encryption
                 cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
                 encrypted_resp_bytes, resp_tag = cipher_resp.encrypt_and_digest(json.dumps(response).encode("utf-8"))
                 full_resp = encrypted_resp_bytes + resp_tag
                 full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
+                
+                logger.info("Encrypted flow response generated successfully.")
 
                 return PlainTextResponse(full_resp_b64)
 
+            except ValueError as e:
+                # Catches errors related to RSA Decryption failure, GCM verification failure, or JSON loading
+                logger.error(f"⚠️ Security/Decryption Failed: ValueError: {e}")
+                # This specific error usually means the private key is wrong or the data was tampered with.
+                return PlainTextResponse("Decryption or data verification failed. Check RSA key pair.", status_code=400)
+            
             except Exception as e:
-                logger.exception(f"Flow Decryption Error: {e}")
-                return PlainTextResponse("Failed to decrypt flow payload", status_code=500)
+                logger.exception(f"General Flow Decryption Error: {e}")
+                return PlainTextResponse("Failed to decrypt flow payload due to internal error.", status_code=500)
 
-        # ---- Regular WhatsApp message ----
+        # ---- Regular WhatsApp message handling (Unchanged) ----
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -119,6 +170,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         if not messages:
             return PlainTextResponse("OK")
 
+        # ... (rest of the regular message handling logic)
+        
         message = messages[0]
         from_number = message.get("from")
         msg_type = message.get("type")
@@ -178,6 +231,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         )
         return PlainTextResponse("OK")
 
+
     except Exception as e:
-        logger.exception(f"Webhook Error: {e}")
+        logger.exception(f"Top-level Webhook Error: {e}")
         return PlainTextResponse("Internal Server Error", status_code=500)
