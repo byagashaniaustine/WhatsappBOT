@@ -8,6 +8,8 @@ from fastapi.responses import PlainTextResponse
 # Import cryptography libraries
 try:
     from Crypto.PublicKey import RSA
+    # Import relevant Hash algorithm explicitly
+    from Crypto.Hash import SHA256 
     from Crypto.Cipher import PKCS1_OAEP, AES
     from Crypto.Util.Padding import unpad
 except ImportError:
@@ -63,14 +65,18 @@ if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
 
 PRIVATE_KEY = None
+RSA_CIPHER = None
 try:
     logger.info("Attempting to load RSA private key from environment variable.")
     
     # 1. Use the robust loader
     PRIVATE_KEY = load_private_key(private_key_str)
     
-    # 2. Initialize the RSA Cipher
-    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
+    # 2. Initialize the RSA Cipher using OAEP with SHA256 hash, as required by Meta Flows docs.
+    # PyCryptodome defaults to SHA-1, which causes decryption failure if Meta uses SHA256.
+    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256, mgf=PKCS1_OAEP.MGF1, MGF1Hash=SHA256)
+    
+    logger.info("RSA Cipher initialized with PKCS1_OAEP and SHA256 parameters.")
     
     # --- CRITICAL DEBUG STEP: LOG PUBLIC KEY FOR VALIDATION ---
     public_key_pem = PRIVATE_KEY.publickey().export_key(format='PEM').decode('utf-8')
@@ -115,6 +121,16 @@ async def verify_webhook(request: Request):
         return PlainTextResponse(challenge)
 
     raise HTTPException(status_code=403, detail="Verification failed")
+
+
+# --- DEBUG / HEALTH CHECK ENDPOINT ---
+@app.post("/debug-test/")
+async def debug_test(request: Request):
+    """A minimal endpoint to confirm the server is receiving and logging requests."""
+    logger.critical(f"✅ [DEBUG] Successfully hit the /debug-test/ endpoint from {request.client.host if request.client else 'Unknown Host'}")
+    raw_body = await request.body()
+    logger.debug(f"[DEBUG] Raw Body Length: {len(raw_body)} bytes.")
+    return PlainTextResponse("Debug check successful. Check logs for CRITICAL messages.", status_code=200)
 
 
 # --- WEBHOOK HANDLER (POST) ---
@@ -173,7 +189,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         f"got {len(encrypted_aes_key_bytes)} bytes. Check key size and padding."
                     )
                 
-                # The actual RSA decryption
+                # The actual RSA decryption. This step now uses SHA256.
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
                 logger.info(f"✅ AES key successfully decrypted. Key length: {len(aes_key)} bytes.")
 
