@@ -30,6 +30,44 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
+# --- FLOW SCREEN DEFINITIONS (AS PROVIDED BY USER) ---
+# To navigate to a screen, return the corresponding response from the endpoint.
+SCREEN_RESPONSES = {
+    "LOAN": {
+        "screen": "LOAN",
+        "data": {}
+    },
+    "CONFIRM": {
+        "screen": "CONFIRM",
+        "data": {
+            "loan_amount": "50000",
+            "loan_duration": "30",
+            "interest_rate_type": "day",
+            "interest_rate_percent": "5"
+        }
+    },
+    "SUCCESS": {
+        "screen": "SUCCESS",
+        "data": {
+            # Meta requires the flow_token back in the extension_message_response 
+            # when transitioning to a non-flow screen (i.e., sending a message).
+            "extension_message_response": {
+                "params": {
+                    # This token MUST be dynamically replaced with the one from the incoming payload
+                    "flow_token": "REPLACE_FLOW_TOKEN", 
+                    "some_param_name": "PASS_CUSTOM_VALUE"
+                }
+            }
+        }
+    },
+    # Add a simple error screen fallback
+    "ERROR": {
+        "screen": "ERROR",
+        "data": {"error_message": "An unknown action occurred."}
+    }
+}
+# ---------------------------------------------------
+
 # --- UTILITY FUNCTION FOR ROBUST KEY LOADING ---
 def load_private_key(key_string: str) -> RSA.RsaKey:
     """Handles various newline escaping issues when loading key from ENV."""
@@ -73,8 +111,7 @@ try:
     PRIVATE_KEY = load_private_key(private_key_str)
     
     # 2. Initialize the RSA Cipher using OAEP with SHA256 hash.
-    # We must only use 'hashAlgo=SHA256' as the additional 'mgf' arguments are not supported 
-    # in this version of PyCryptodome and caused the TypeError crash.
+    # We must only use 'hashAlgo=SHA256' to align with Meta's requirements.
     RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
     
     logger.info("RSA Cipher initialized with PKCS1_OAEP and SHA256 hashAlgo.")
@@ -165,7 +202,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         
         logger.info(
             f"Payload flags -> Flow data check: {is_flow_payload}, "
-            f"encrypted_flow_data: {encrypted_flow_b64 is not None}, "
+            f"encrypted_flow_data: {encrypted_aes_key_b64 is not None}, "
             f"encrypted_aes_key: {encrypted_aes_key_b64 is not None}, "
             f"iv: {iv_b64 is not None}"
         )
@@ -216,34 +253,54 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 logger.info(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
                 # 5️⃣ Determine action for response (Crucial for Health Check)
-                
-                # For health check, Meta sends an INIT action. We must reply with an encrypted response.
                 action = decrypted_data.get("action")
+                flow_token = decrypted_data.get("flow_token")
                 
+                # --- Flow Logic: Select the correct response based on action ---
                 if action == "INIT":
-                    # This is the expected payload for the Meta Health Check or Flow launch
-                    response_screen = "MAIN_SCREEN" 
-                    response_data = {"status": "success", "message": "Health Check/Flow Initialized."}
-                else:
-                    # For BACK, data_exchange, etc. you'd typically process logic here.
-                    response_screen = decrypted_data.get("screen", "RESPONSE_SCREEN_NAME")
-                    response_data = {"status": "success", "message": f"Action {action} processed."}
+                    # Health Check / Initial Launch: Should return the first screen, LOAN.
+                    response_obj = SCREEN_RESPONSES["LOAN"]
+                elif action == "data_exchange":
+                    # For a data exchange, we usually inspect the data to decide where to navigate.
+                    # For debugging, we'll hardcode a CONFIRM response. 
+                    # In a real app, you would look at decrypted_data['data'] here.
+                    response_obj = SCREEN_RESPONSES["CONFIRM"]
+                elif action == "SUCCESS_ACTION_NAME_FROM_FLOW_BUTTON":
+                    # Example: A final 'Submit' action that moves out of the Flow.
+                    # We must pass the flow_token back to Meta in the response data.
+                    response_obj = json.loads(json.dumps(SCREEN_RESPONSES["SUCCESS"])) # Deep copy
+                    
+                    if flow_token:
+                        # Replace the placeholder with the actual flow token
+                        response_obj["data"]["extension_message_response"]["params"]["flow_token"] = flow_token
+                    else:
+                        logger.warning("Flow token missing in SUCCESS action payload!")
 
+                else:
+                    # Default fallback: return the original screen name but with an error message
+                    current_screen = decrypted_data.get("screen", "ERROR")
+                    response_obj = SCREEN_RESPONSES["ERROR"]
+                    response_obj["screen"] = current_screen
+                    response_obj["data"]["error_message"] = f"Action '{action}' not handled."
+                
+                # Final response object to be encrypted
+                response = response_obj
+                # -----------------------------------------------------------------
 
                 # 6️⃣ Return encrypted response in base64 (MANDATORY for Flow)
-                response = {
-                    "screen": response_screen, 
-                    "data": response_data
-                }
-
+                
                 # Encrypt response using AES-GCM with flipped IV
                 flipped_iv = bytes([b ^ 0xFF for b in iv]) # Standard practice for response encryption
                 cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
-                encrypted_resp_bytes, resp_tag = cipher_resp.encrypt_and_digest(json.dumps(response).encode("utf-8"))
+                
+                # Ensure the response is a JSON string before encoding
+                response_json_string = json.dumps(response)
+                
+                encrypted_resp_bytes, resp_tag = cipher_resp.encrypt_and_digest(response_json_string.encode("utf-8"))
                 full_resp = encrypted_resp_bytes + resp_tag
                 full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
                 
-                logger.info("Encrypted flow response generated successfully and returning 200 OK.")
+                logger.info(f"Encrypted flow response generated successfully and returning 200 OK. Next Screen: {response['screen']}")
 
                 # This successful, encrypted response is what Meta needs for the health check!
                 return PlainTextResponse(full_resp_b64)
