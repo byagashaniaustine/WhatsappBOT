@@ -9,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 try:
     from Crypto.PublicKey import RSA
     from Crypto.Cipher import PKCS1_OAEP, AES
-    from Crypto.Util.Padding import unpad # Not strictly needed for GCM, but good practice if mode changes
+    from Crypto.Util.Padding import unpad
 except ImportError:
     # A helpful message if the user forgot to install pycryptodome
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
@@ -28,22 +28,48 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
+# --- UTILITY FUNCTION FOR ROBUST KEY LOADING ---
+def load_private_key(key_string: str) -> RSA.RsaKey:
+    """Handles various newline escaping issues when loading key from ENV."""
+    # Attempt to handle common escape sequences for newlines
+    key_string = key_string.replace("\\n", "\n").replace("\r\n", "\n")
+    try:
+        # Standard import
+        return RSA.import_key(key_string)
+    except ValueError as e:
+        # If standard import fails, try stripping common whitespace/noise
+        logger.warning(f"Initial key import failed: {e}. Attempting clean import...")
+        key_lines = [
+            line.strip() 
+            for line in key_string.split('\n') 
+            if line.strip() and not line.strip().startswith(('-----'))
+        ]
+        
+        # If the key is just raw base64 without headers, Crypto.PublicKey handles it if the format is specified,
+        # but since we expect PEM, let's re-add headers if they were stripped accidentally.
+        if not key_string.startswith('-----BEGIN'):
+             cleaned_key_string = (
+                "-----BEGIN PRIVATE KEY-----\n" + 
+                "\n".join(key_lines) + 
+                "\n-----END PRIVATE KEY-----"
+            )
+             return RSA.import_key(cleaned_key_string)
+        
+        raise # Re-raise if cleaning didn't help
+
 # --- KEY LOADING AND SETUP ---
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
-    # This will still raise an error, but with a clearer message
     raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
 
 PRIVATE_KEY = None
 try:
-    # 1. Handle escaped newlines (the most common cause of failure)
-    private_key_str = private_key_str.replace("\\n", "\n")
     logger.info("Attempting to load RSA private key from environment variable.")
     
-    # 2. Import the key
-    PRIVATE_KEY = RSA.import_key(private_key_str)
+    # 1. Use the robust loader
+    PRIVATE_KEY = load_private_key(private_key_str)
     
-    # 3. Initialize the RSA Cipher
+    # 2. Initialize the RSA Cipher
     RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY)
     
     # --- CRITICAL DEBUG STEP: LOG PUBLIC KEY FOR VALIDATION ---
@@ -53,6 +79,21 @@ try:
     logger.debug(public_key_pem)
     logger.debug("----------------------------------------------------------------------\n")
     
+    # Verify the match manually based on the keys you provided
+    provided_public_key = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtFvfYSl7PleeHgBioPxz
+OoQ5ClaDysJwTf2l7EF8tG+jSq9oeE16MIfHWF3+xH3x4vKtXsRP7FqgBQjBOXao
+z7Gb53lt6Fm2bpH/ABYaYcawEjGZCE5KBVybl30SDJVTp3LC52Yql2VcO88q54SE
+8ATc5+5Zg1vZwFac6aMq2Ej/9EmzbS0Bc3QAB4iF7zx/bVwZStM2vqRpR6NDyF4S
+9VhuSid3m4pVfFFoUMYrIpOCI2ISkRAq7y7WUAq9b63zG+Eej6hnbLnEA6veoQ7u
+eeOqPHwkl2tkBMTaYvrGk6bI3+L0XY4aDVyA9syFdpJ/cbv4cn3FAQbM7B+sN1kU
+swIDAQAB
+-----END PUBLIC KEY-----"""
+    
+    # Simple, non-cryptographic string comparison (ignoring whitespace for robustness)
+    if "".join(public_key_pem.split()) != "".join(provided_public_key.split()):
+        logger.critical("🚨 KEY MISMATCH DETECTED DURING SELF-CHECK! The Public Key generated from the loaded Private Key does NOT match the Public Key provided in the chat. You MUST ensure the key registered with Meta matches the one generated from your loaded Private Key.")
+        # Do not raise an error here, but warn strongly, as the runtime environment might be correct even if the chat history was wrong.
 
 except ValueError as e:
     logger.critical(f"FATAL: Failed to import RSA Private Key. Check formatting (BEGIN/END tags, base64 encoding, and presence of all newlines). Error: {e}")
@@ -79,8 +120,27 @@ async def verify_webhook(request: Request):
 # --- WEBHOOK HANDLER (POST) ---
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
+    # This is the first log we should see if the function is hit
+    logger.debug("--- Webhook POST handler started ---")
+    
+    # Read and log the raw body BEFORE trying to parse as JSON
+    raw_body = await request.body()
     try:
-        payload = await request.json()
+        # Log the raw body, truncated if necessary
+        body_log = raw_body.decode('utf-8')
+        if len(body_log) > 500:
+            body_log = body_log[:500] + "..."
+        logger.debug(f"Incoming RAW Body (Truncated): {body_log}")
+    except Exception:
+        logger.debug(f"Incoming RAW Body (Bytes): {raw_body[:500]}...")
+
+
+    try:
+        # Attempt to parse as JSON. This is where the app might have been crashing.
+        payload = json.loads(raw_body.decode('utf-8'))
+        
+        # Log parsed payload if successful
+        logger.debug("Successfully parsed payload as JSON.")
 
         # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
@@ -98,6 +158,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
         if is_flow_payload:
             try:
+                # --- CRUCIAL DEBUG STEP: Log the incoming base64 strings ---
+                logger.debug(f"Incoming Encrypted AES Key (b64): {encrypted_aes_key_b64[:30]}...")
+                logger.debug(f"Incoming Initial Vector (b64): {iv_b64}")
+                # -----------------------------------------------------------------
+
                 # 1️⃣ Decode and decrypt AES key with RSA
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
                 
@@ -161,7 +226,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse(full_resp_b64)
 
             except ValueError as e:
-                # Catches errors related to RSA Decryption failure, GCM verification failure, or JSON loading
+                # Catches errors related to RSA Decryption failure (Incorrect decryption), GCM verification failure (MAC check failed), or JSON loading
                 logger.error(f"⚠️ Security/Decryption Failed: ValueError: {e}")
                 # This specific error usually means the private key is wrong or the data was tampered with.
                 return PlainTextResponse("Decryption or data verification failed. Check RSA key pair.", status_code=400)
@@ -242,5 +307,5 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
 
     except Exception as e:
-        logger.exception(f"Top-level Webhook Error: {e}")
-        return PlainTextResponse("Internal Server Error", status_code=500)
+        logger.exception(f"Top-level Webhook Parsing Error: {e}")
+        return PlainTextResponse("Internal Server Error during payload parsing.", status_code=500)
