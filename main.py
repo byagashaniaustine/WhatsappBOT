@@ -31,6 +31,7 @@ app = FastAPI()
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
 # --- FLOW SCREEN DEFINITIONS (AS PROVIDED BY USER) ---
+# NOTE: Changed 'const' to standard Python assignment.
 # To navigate to a screen, return the corresponding response from the endpoint.
 SCREEN_RESPONSES = {
     "LOAN": {
@@ -44,6 +45,13 @@ SCREEN_RESPONSES = {
             "loan_duration": "30",
             "interest_rate_type": "day",
             "interest_rate_percent": "5"
+        }
+    },
+    # Special response for the encrypted 'ping' health check action
+    "HEALTH_CHECK_PING": {
+        "screen": "HEALTH_CHECK_OK", # Placeholder screen name
+        "data": {
+            "status": "active" # The status Meta expects for this test
         }
     },
     "SUCCESS": {
@@ -202,7 +210,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         
         logger.info(
             f"Payload flags -> Flow data check: {is_flow_payload}, "
-            f"encrypted_flow_data: {encrypted_aes_key_b64 is not None}, "
+            f"encrypted_flow_data: {encrypted_flow_b64 is not None}, "
             f"encrypted_aes_key: {encrypted_aes_key_b64 is not None}, "
             f"iv: {iv_b64 is not None}"
         )
@@ -260,10 +268,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 if action == "INIT":
                     # Health Check / Initial Launch: Should return the first screen, LOAN.
                     response_obj = SCREEN_RESPONSES["LOAN"]
+                elif action == "ping":
+                    # FIX: Handle the specific encrypted 'ping' action for the health check endpoint
+                    response_obj = SCREEN_RESPONSES["HEALTH_CHECK_PING"]
                 elif action == "data_exchange":
                     # For a data exchange, we usually inspect the data to decide where to navigate.
-                    # For debugging, we'll hardcode a CONFIRM response. 
-                    # In a real app, you would look at decrypted_data['data'] here.
                     response_obj = SCREEN_RESPONSES["CONFIRM"]
                 elif action == "SUCCESS_ACTION_NAME_FROM_FLOW_BUTTON":
                     # Example: A final 'Submit' action that moves out of the Flow.
