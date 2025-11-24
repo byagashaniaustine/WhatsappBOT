@@ -15,21 +15,13 @@ logger.setLevel(logging.INFO)
 # -----------------------------------
 ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
-
-# WhatsApp Cloud API version (Consistent with recent Meta API logs)
-API_VERSION = "v24.0" 
-
-API_URL = f"https://graph.facebook.com/{API_VERSION}/{PHONE_NUMBER_ID}/messages"
-MEDIA_API_BASE_URL = f"https://graph.facebook.com/{API_VERSION}/"
-
-# TEMPORARY DEBUGGING LINE - CHECK THIS OUTPUT IN RAILWAY LOGS!
-logger.info(f"*** DEBUG: Using PHONE_NUMBER_ID: {PHONE_NUMBER_ID} for API_URL: {API_URL}")
+API_URL = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+MEDIA_API_BASE_URL = "https://graph.facebook.com/v24.0/"
 
 # ==============================================================
 # SEND SIMPLE WHATSAPP TEXT MESSAGE
 # ==============================================================
-def send_meta_whatsapp_message(to: str, body: str, wa_id: str) -> Dict[str, Any]:
-    # NOTE: wa_id is included for compatibility with caller but not used here.
+def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
@@ -104,7 +96,7 @@ def get_media_url(media_id: str) -> str:
         raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
 
     url = f"{MEDIA_API_BASE_URL}{media_id}"
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}   
+    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
     try:
         logger.info(f"📥 Fetching media URL for ID {media_id}")
