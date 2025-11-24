@@ -1,124 +1,147 @@
-import os
-import uuid
 import logging
-import requests
-from typing import Dict, Any, Optional
+from fastapi.responses import PlainTextResponse
+from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_template
 
-# -----------------------------------
-# LOGGER SETUP
-# -----------------------------------
-logger = logging.getLogger("meta_service")
+logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
-# -----------------------------------
-# ENVIRONMENT VARIABLES
-# -----------------------------------
-ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
+# =====================================================
+# MAIN MENU
+# =====================================================
+main_menu = {
+    "1": "Fahamu kuhusu Alama za Mikopo (Credit Score)",
+    "2": "Kiwango cha Mkopo (Credit Bandwidth)",
+    "3": "Nakopesheka!! (Uwezo wa Kukopa) - Template + Flow",
+    "4": "Kikokotoo cha Mkopo (Loan Calculator)",
+    "5": "Aina za Mikopo",
+    "6": "Huduma za Mikopo"
+}
 
-# WhatsApp Cloud API version (Using v24.0 as per your latest error traceback)
-API_VERSION = "v24.0" 
+# =====================================================
+# USER STATES
+# =====================================================
+user_states = {}  # Example: {"+255712345678": {"mode": "LOAN_CALC", "step": 1, "data": {}}}
 
-API_URL = f"https://graph.facebook.com/{API_VERSION}/{PHONE_NUMBER_ID}/messages"
-MEDIA_API_BASE_URL = f"https://graph.facebook.com/{API_VERSION}/"
+# =====================================================
+# LOAN CALCULATOR HELPER
+# =====================================================
+def calculate_monthly_payment(principal: float, duration: int, rate_percent: float, riba_type: int) -> float:
+    if riba_type == 1:      # daily
+        months = duration / 30
+    elif riba_type == 2:    # weekly
+        months = duration / 4
+    else:                   # monthly
+        months = duration
+    total_payment = principal * (1 + (rate_percent / 100) * months)
+    return total_payment / months if months else total_payment
 
-# TEMPORARY DEBUGGING LINE - CHECK THIS OUTPUT IN RAILWAY LOGS!
-logger.info(f"*** DEBUG: Using PHONE_NUMBER_ID: {PHONE_NUMBER_ID} for API_URL: {API_URL}")
-
-# ==============================================================
-# SEND SIMPLE WHATSAPP TEXT MESSAGE
-# ==============================================================
-def send_meta_whatsapp_message(to: str, body: str, wa_id: str) -> Dict[str, Any]:
-    # NOTE: wa_id from webhook is not used here as API_URL is built from ENV at startup
-    if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
-        raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
-
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "text",
-        "text": {"body": body}
-    }
-
+# =====================================================
+# MAIN WHATSAPP BOT FUNCTION
+# =====================================================
+async def whatsapp_menu(data: dict):
     try:
-        response = requests.post(API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        logger.info(f"✅ Message sent to {to}. Response: {response.json()}")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Error sending message to {to}: {e}")
-        # Raising RuntimeError here ensures the error is propagated to the caller
-        raise RuntimeError(f"Meta API call failed: {e}")
+        from_number = str(data.get("From") or "")
+        if not from_number.startswith("+"):
+            from_number = "+" + from_number
 
-# ==============================================================
-# SEND WHATSAPP TEMPLATE MESSAGE
-# ==============================================================
-def send_meta_whatsapp_template(
-    to: str,
-    template_name: str,
-    language_code: str = "en_US",
-    components: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+        incoming_msg = str(data.get("Body") or "").strip().lower()
+        state = user_states.get(from_number)
 
-    if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
-        raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
+        # =========================
+        # LOAN CALCULATOR FLOW
+        # =========================
+        if state and state.get("mode") == "LOAN_CALC":
+            step = state["step"]
+            collected = state["data"]
 
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
+            try:
+                if step == 1:
+                    collected["principal"] = float(incoming_msg)
+                    state["step"] = 2
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza muda wa mkopo (siku / wiki / miezi):")
+                elif step == 2:
+                    collected["duration"] = int(incoming_msg)
+                    state["step"] = 3
+                    send_meta_whatsapp_message(
+                        from_number,
+                        "Chagua aina ya riba:\n1️⃣ Riba ya Siku\n2️⃣ Riba ya Wiki\n3️⃣ Riba ya Mwezi"
+                    )
+                elif step == 3:
+                    if incoming_msg not in ["1", "2", "3"]:
+                        send_meta_whatsapp_message(from_number, "❌ Tafadhali chagua 1, 2, au 3.")
+                        return PlainTextResponse("OK")
+                    collected["riba_type"] = int(incoming_msg)
+                    state["step"] = 4
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza asilimia ya riba (%):")
+                elif step == 4:
+                    collected["rate"] = float(incoming_msg)
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": language_code},
-        }
-    }
+                    P = collected["principal"]
+                    t = collected["duration"]
+                    r = collected["rate"]
+                    riba_type = collected["riba_type"]
 
-    if components:
-        payload["template"]["components"] = components
+                    monthly_payment = calculate_monthly_payment(P, t, r, riba_type)
+                    unit = "siku" if riba_type == 1 else "wiki" if riba_type == 2 else "miezi"
 
-    try:
-        logger.info(f"🚀 Sending Template '{template_name}' to {to}")
-        response = requests.post(API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        logger.info(f"✅ Template sent successfully: {response.json()}")
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Template send error for {to}: {e}")
-        # Raising RuntimeError here ensures the error is propagated to the caller
-        raise RuntimeError(f"Meta Template API call failed: {e}")
+                    send_meta_whatsapp_message(
+                        from_number,
+                        f"💰 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
+                        f"Kiasi cha mkopo: Tsh {P:,.0f}\n"
+                        f"Muda: {t} {unit}\n"
+                        f"Riba: {r}%\n\n"
+                        f"Kiasi cha kulipa kila mwezi: *Tsh {monthly_payment:,.0f}*"
+                    )
+                    user_states.pop(from_number)
+                    return PlainTextResponse("OK")
 
-# ==============================================================
-# GET MEDIA DOWNLOAD URL
-# ==============================================================
-def get_media_url(media_id: str) -> str:
-    if not ACCESS_TOKEN:
-        raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
+            except ValueError:
+                send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.")
+                return PlainTextResponse("OK")
 
-    url = f"{MEDIA_API_BASE_URL}{media_id}"
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+            return PlainTextResponse("OK")
 
-    try:
-        logger.info(f"📥 Fetching media URL for ID {media_id}")
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        # =========================
+        # SHOW MAIN MENU
+        # =========================
+        if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
+            menu_list = "\n".join([f"*{k}* - {v}" for k, v in main_menu.items()])
+            send_meta_whatsapp_message(
+                from_number,
+                f"👋 *Karibu kwenye Huduma za Mikopo!*\n\nChagua huduma kwa kutuma namba:\n\n{menu_list}"
+            )
+            return PlainTextResponse("OK")
 
-        download_url = data.get("url")
-        if not download_url:
-            raise RuntimeError(f"No URL returned for media_id {media_id}. Response: {data}")
+        # =========================
+        # HANDLE MENU SELECTION
+        # =========================
+        if incoming_msg in main_menu:
+            if incoming_msg == "3":
+                send_meta_whatsapp_template(
+                    to=from_number,
+                    template_name="nakopeeshekaa_1",
+                    language_code="en_US",
+                    components=[{"type": "body", "parameters": []}]
+                )
+                return PlainTextResponse("OK")
 
-        logger.info("✅ Media URL retrieved successfully")
-        return download_url
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Media URL lookup failed: {e}")
-        raise RuntimeError(f"Media URL lookup failed: {e}")
+            elif incoming_msg == "4":
+                user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
+                send_meta_whatsapp_message(from_number, "Karibu kwenye Kikokotoo cha Mkopo!\nTafadhali ingiza kiasi unachotaka kukopa (Tsh):")
+                return PlainTextResponse("OK")
+
+            else:
+                title = main_menu[incoming_msg]
+                send_meta_whatsapp_message(from_number, f"*{title}*\n\nTafadhali angalia huduma hii kupitia flow yetu ya WhatsApp.")
+                return PlainTextResponse("OK")
+
+        # =========================
+        # UNKNOWN INPUT
+        # =========================
+        send_meta_whatsapp_message(from_number, "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.")
+        return PlainTextResponse("OK")
+
+    except Exception as e:
+        logger.exception(f"❌ Error in whatsapp_menu: {e}")
+        send_meta_whatsapp_message(from_number, "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.")
+        return PlainTextResponse("Internal Server Error", status_code=500)
