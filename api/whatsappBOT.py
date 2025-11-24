@@ -119,7 +119,7 @@ async def whatsapp_menu(data: dict):
             if incoming_msg == "3":
                 send_meta_whatsapp_template(
                     to=from_number,
-                    template_name="hello",
+                    template_name="nakopeeshekaa_1",
                     language_code="en_US",
                     components=[{"type": "body", "parameters": []}]
                 )
