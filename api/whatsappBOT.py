@@ -151,7 +151,7 @@ async def whatsapp_menu(data: dict):
                 send_meta_whatsapp_template(
                     to=from_number,
                     template_name="nakopeshekaa_1",
-                    language="sw",
+                    language="en_US",
                     components=[
                         {
                             "type": "body",
