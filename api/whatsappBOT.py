@@ -36,6 +36,7 @@ def calculate_monthly_payment(principal: float, duration: int, rate_percent: flo
     else:                   # monthly
         months = duration
 
+    # Simple interest calculation, as per original bot logic structure
     total_payment = principal * (1 + (rate_percent / 100) * months)
 
     return total_payment / months if months else total_payment
@@ -45,13 +46,24 @@ def calculate_monthly_payment(principal: float, duration: int, rate_percent: flo
 # MAIN WHATSAPP BOT FUNCTION
 # =====================================================
 async def whatsapp_menu(data: dict):
+    # The 'async' keyword here is unnecessary as there are no 'await' calls inside,
+    # but I'm preserving your provided structure.
     try:
         # ------------------------------------------
-        # Normalize phone number
+        # Normalize phone number and extract required IDs
         # ------------------------------------------
         from_number = str(data.get("From") or "")
         if not from_number.startswith("+"):
             from_number = "+" + from_number
+        
+        # FIX: Extracting the WhatsApp Business Account ID (wa_id) 
+        # Assuming 'WaId' or 'wa_id' is present in the incoming webhook payload 'data'
+        wa_id = str(data.get("WaId") or data.get("wa_id") or "") 
+        if not wa_id:
+             logger.error("WaId is missing in the incoming payload.")
+             # Cannot send response without WaId, so we just return OK
+             return PlainTextResponse("OK")
+
 
         incoming_msg = str(data.get("Body") or "").strip().lower()
         state = user_states.get(from_number)
@@ -71,7 +83,8 @@ async def whatsapp_menu(data: dict):
                     state["step"] = 2
                     send_meta_whatsapp_message(
                         from_number,
-                        "Tafadhali ingiza muda wa mkopo (siku / wiki / miezi):"
+                        "Tafadhali ingiza muda wa mkopo (siku / wiki / miezi):",
+                        wa_id # FIX: Added wa_id
                     )
 
                 # STEP 2: Collect duration
@@ -83,18 +96,19 @@ async def whatsapp_menu(data: dict):
                         "Chagua aina ya riba:\n"
                         "1️⃣ Riba ya Siku\n"
                         "2️⃣ Riba ya Wiki\n"
-                        "3️⃣ Riba ya Mwezi"
+                        "3️⃣ Riba ya Mwezi",
+                        wa_id # FIX: Added wa_id
                     )
 
                 # STEP 3: Choose riba type
                 elif step == 3:
                     if incoming_msg not in ["1", "2", "3"]:
-                        send_meta_whatsapp_message(from_number, "❌ Tafadhali chagua 1, 2, au 3.")
+                        send_meta_whatsapp_message(from_number, "❌ Tafadhali chagua 1, 2, au 3.", wa_id) # FIX: Added wa_id
                         return PlainTextResponse("OK")
 
                     collected["riba_type"] = int(incoming_msg)
                     state["step"] = 4
-                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza asilimia ya riba (%):")
+                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza asilimia ya riba (%):", wa_id) # FIX: Added wa_id
 
                 # STEP 4: Collect interest rate and compute
                 elif step == 4:
@@ -117,12 +131,12 @@ async def whatsapp_menu(data: dict):
                         f"Kiasi cha kulipa kila mwezi: *Tsh {monthly_payment:,.0f}*"
                     )
 
-                    send_meta_whatsapp_message(from_number, message)
+                    send_meta_whatsapp_message(from_number, message, wa_id) # FIX: Added wa_id
                     user_states.pop(from_number)  # CLEAR USER STATE
                     return PlainTextResponse("OK")
 
             except ValueError:
-                send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.")
+                send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.", wa_id) # FIX: Added wa_id
                 return PlainTextResponse("OK")
 
             return PlainTextResponse("OK")
@@ -135,7 +149,8 @@ async def whatsapp_menu(data: dict):
             send_meta_whatsapp_message(
                 from_number,
                 f"👋 *Karibu kwenye Huduma za Mikopo!*\n\n"
-                "Chagua huduma kwa kutuma namba:\n\n" + menu_list
+                "Chagua huduma kwa kutuma namba:\n\n" + menu_list,
+                wa_id # FIX: Added wa_id
             )
             return PlainTextResponse("OK")
 
@@ -148,6 +163,7 @@ async def whatsapp_menu(data: dict):
             # OPTION 3 — Send Template With Flow Button
             # -------------------------------------------------
             if incoming_msg == "3":
+                # NOTE: send_meta_whatsapp_template does not take wa_id as a positional arg
                 send_meta_whatsapp_template(
                     to=from_number,
                     template_name="nakopeshekaa_1",
@@ -169,7 +185,8 @@ async def whatsapp_menu(data: dict):
                 send_meta_whatsapp_message(
                     from_number,
                     "Karibu kwenye Kikokotoo cha Mkopo!\n"
-                    "Tafadhali ingiza kiasi unachotaka kukopa (Tsh):"
+                    "Tafadhali ingiza kiasi unachotaka kukopa (Tsh):",
+                    wa_id # FIX: Added wa_id
                 )
                 return PlainTextResponse("OK")
 
@@ -179,7 +196,8 @@ async def whatsapp_menu(data: dict):
             title = main_menu[incoming_msg]
             send_meta_whatsapp_message(
                 from_number,
-                f"*{title}*\n\nTafadhali angalia huduma hii kupitia flow yetu ya WhatsApp."
+                f"*{title}*\n\nTafadhali angalia huduma hii kupitia flow yetu ya WhatsApp.",
+                wa_id # FIX: Added wa_id
             )
             return PlainTextResponse("OK")
 
@@ -188,15 +206,19 @@ async def whatsapp_menu(data: dict):
         # =====================================================
         send_meta_whatsapp_message(
             from_number,
-            "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena."
+            "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena.",
+            wa_id # FIX: Added wa_id
         )
         return PlainTextResponse("OK")
 
     except Exception as e:
         logger.exception(f"❌ Error in whatsapp_menu: {e}")
 
-        send_meta_whatsapp_message(
-            from_number,
-            "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'."
-        )
+        # Ensure the final error message also includes wa_id
+        if 'wa_id' in locals() and wa_id:
+            send_meta_whatsapp_message(
+                from_number,
+                "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'.",
+                wa_id # FIX: Added wa_id
+            )
         return PlainTextResponse("Internal Server Error", status_code=500)
