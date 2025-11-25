@@ -164,7 +164,7 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
     
     return send_meta_whatsapp_template(
         to=to,
-        template_name="manka_menu",
+        template_name="manka_menu_01",
         language_code="en",
         components=components
     )
