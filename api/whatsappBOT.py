@@ -1,6 +1,10 @@
 import logging
 from fastapi.responses import PlainTextResponse
-from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_template, send_manka_menu_template
+from services.meta import (
+    send_meta_whatsapp_message,
+    send_meta_whatsapp_template,
+    send_manka_menu_template
+)
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
@@ -8,15 +12,12 @@ logger.setLevel(logging.INFO)
 # =====================================================
 # USER STATES
 # =====================================================
-user_states = {}  
-# Example: {"+255712345678": {"mode": "LOAN_CALC", "step": 1, "data": {}}}
+user_states = {}
 
 # =====================================================
 # LOAN CALCULATOR HELPER
 # =====================================================
 def calculate_monthly_payment(principal: float, duration: int, rate_percent: float, riba_type: int) -> float:
-    """Calculate monthly payment based on principal, duration, interest rate, and riba type."""
-    
     if riba_type == 1:      # daily
         months = duration / 30
     elif riba_type == 2:    # weekly
@@ -25,46 +26,99 @@ def calculate_monthly_payment(principal: float, duration: int, rate_percent: flo
         months = duration
 
     total_payment = principal * (1 + (rate_percent / 100) * months)
-
     return total_payment / months if months else total_payment
 
 # =====================================================
-# MAIN WHATSAPP BOT FUNCTION
+# UNIVERSAL SCREEN ROUTER (FOR ALL JSON FLOW SCREENS)
+# =====================================================
+async def route_flow_screen(screen_name: str, payload: dict, user: str):
+    logger.info(f"➡️ Routing screen: {screen_name}")
+
+    screen_handlers = {
+        # Add all your flow screens here
+        "welcome_screen": handle_welcome_screen,
+        "loan_amount_screen": handle_loan_amount_screen,
+        "loan_duration_screen": handle_loan_duration_screen,
+        "confirm_details_screen": handle_confirm_details_screen,
+        "final_submission_screen": handle_final_submission_screen,
+        # Add more screens as needed
+    }
+
+    handler = screen_handlers.get(screen_name)
+
+    if handler is None:
+        logger.warning(f"⚠️ No handler mapped for screen: {screen_name}")
+        send_meta_whatsapp_message(user, f"🚧 Screen '{screen_name}' not implemented.")
+        return PlainTextResponse("OK")
+
+    return await handler(payload, user)
+
+# =====================================================
+# SAMPLE SCREEN HANDLERS
+# (YOU WILL DUPLICATE & EDIT FOR YOUR REAL FLOW SCREENS)
+# =====================================================
+async def handle_welcome_screen(payload, user):
+    name = payload.get("name") or ""
+    send_meta_whatsapp_message(user, f"Karibu {name}! Endelea kuchagua.")
+    return PlainTextResponse("OK")
+
+async def handle_loan_amount_screen(payload, user):
+    amount = payload.get("amount")
+    send_meta_whatsapp_message(user, f"Umechagua kiasi: {amount}")
+    return PlainTextResponse("OK")
+
+async def handle_loan_duration_screen(payload, user):
+    duration = payload.get("duration")
+    send_meta_whatsapp_message(user, f"Muda wa mkopo: {duration}")
+    return PlainTextResponse("OK")
+
+async def handle_confirm_details_screen(payload, user):
+    send_meta_whatsapp_message(user, "Asante kwa kuthibitisha taarifa zako!")
+    return PlainTextResponse("OK")
+
+async def handle_final_submission_screen(payload, user):
+    send_meta_whatsapp_message(user, "Maombi yako yametumwa kikamilifu!")
+    return PlainTextResponse("OK")
+
+# =====================================================
+# MAIN WHATSAPP BOT FUNCTION — FULL REWRITE
 # =====================================================
 async def whatsapp_menu(data: dict):
     try:
-        # ------------------------------------------
         # Normalize phone number
-        # ------------------------------------------
         from_number = str(data.get("From") or "")
         if not from_number.startswith("+"):
             from_number = "+" + from_number
 
-        incoming_msg = data.get("Body")  # could be str (text) or dict (flow payload)
+        incoming_msg = data.get("Body")
         state = user_states.get(from_number)
 
-        # ------------------------------------------
-        # Handle dynamic flow payload
-        # ------------------------------------------
+        # =====================================================
+        # DYNAMIC FLOW PAYLOAD HANDLING (ALL SCREENS)
+        # =====================================================
         if isinstance(incoming_msg, dict):
             screen = data.get("screen")
             flow_id = data.get("flow_id")
-            logger.info(f"📥 Received flow payload from {from_number}, Screen: {screen}, Flow ID: {flow_id}")
 
-            # Map known flow keys to legacy numeric/text commands
-            if "menu_selection" in incoming_msg:
-                incoming_msg = str(incoming_msg["menu_selection"])
-            elif "step_command" in incoming_msg:
-                incoming_msg = str(incoming_msg["step_command"])
-            else:
-                # fallback: stringify all data for logging/debug
-                incoming_msg = str(incoming_msg)
+            logger.info(
+                f"📥 FLOW PAYLOAD RECEIVED | User: {from_number} | Screen: {screen} | Flow ID: {flow_id}"
+            )
+
+            # Route based on FLOW SCREEN
+            if screen:
+                return await route_flow_screen(
+                    screen_name=screen,
+                    payload=incoming_msg,
+                    user=from_number
+                )
+
+            incoming_msg = str(incoming_msg)
 
         else:
             incoming_msg = str(incoming_msg or "").strip().lower()
 
         # =====================================================
-        # LOAN CALCULATOR FLOW STEPS
+        # LOAN CALCULATOR FLOW (UNTOUCHED)
         # =====================================================
         if state and state.get("mode") == "LOAN_CALC":
 
@@ -78,7 +132,7 @@ async def whatsapp_menu(data: dict):
                     state["step"] = 2
                     send_meta_whatsapp_message(
                         from_number,
-                        "Tafadhali ingiza muda wa mkopo (siku / wiki / miezi):"
+                        "Tafadhali ingiza muda wa mkopo (siku/wiki/miezi):"
                     )
 
                 # STEP 2: Collect duration
@@ -88,22 +142,22 @@ async def whatsapp_menu(data: dict):
                     send_meta_whatsapp_message(
                         from_number,
                         "Chagua aina ya riba:\n"
-                        "1️⃣ Riba ya Siku\n"
-                        "2️⃣ Riba ya Wiki\n"
-                        "3️⃣ Riba ya Mwezi"
+                        "1️⃣ Siku\n"
+                        "2️⃣ Wiki\n"
+                        "3️⃣ Mwezi"
                     )
 
                 # STEP 3: Choose riba type
                 elif step == 3:
                     if incoming_msg not in ["1", "2", "3"]:
-                        send_meta_whatsapp_message(from_number, "❌ Tafadhali chagua 1, 2, au 3.")
+                        send_meta_whatsapp_message(from_number, "❌ Chagua 1, 2, au 3.")
                         return PlainTextResponse("OK")
 
                     collected["riba_type"] = int(incoming_msg)
                     state["step"] = 4
-                    send_meta_whatsapp_message(from_number, "Tafadhali ingiza asilimia ya riba (%):")
+                    send_meta_whatsapp_message(from_number, "Ingiza asilimia ya riba (%):")
 
-                # STEP 4: Collect interest rate and compute
+                # STEP 4: Calculate final result
                 elif step == 4:
                     collected["rate"] = float(incoming_msg)
 
@@ -117,38 +171,32 @@ async def whatsapp_menu(data: dict):
                     unit = "siku" if riba_type == 1 else "wiki" if riba_type == 2 else "miezi"
 
                     message = (
-                        f"💰 *Matokeo ya Kikokotoo cha Mkopo*\n\n"
-                        f"Kiasi cha mkopo: Tsh {P:,.0f}\n"
+                        f"💰 *Kikokotoo cha Mkopo*\n\n"
+                        f"Kiasi: Tsh {P:,.0f}\n"
                         f"Muda: {t} {unit}\n"
                         f"Riba: {r}%\n\n"
                         f"Kiasi cha kulipa kila mwezi: *Tsh {monthly_payment:,.0f}*"
                     )
 
                     send_meta_whatsapp_message(from_number, message)
-                    user_states.pop(from_number)  # CLEAR USER STATE
+                    user_states.pop(from_number)
                     return PlainTextResponse("OK")
 
             except ValueError:
-                send_meta_whatsapp_message(from_number, "❌ Tafadhali ingiza namba sahihi.")
+                send_meta_whatsapp_message(from_number, "❌ Ingiza namba sahihi.")
                 return PlainTextResponse("OK")
 
             return PlainTextResponse("OK")
 
         # =====================================================
-        # SHOW MAIN MENU TEMPLATE
+        # MAIN MENU — Template
         # =====================================================
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
-            try:
-                logger.info(f"👋 User {from_number} initiated conversation - sending manka_menu template")
-                send_manka_menu_template(to=from_number)
-                logger.info(f"✅ Successfully sent manka_menu template to {from_number}")
-                return PlainTextResponse("OK")
-            except Exception as e:
-                logger.error(f"❌ Failed to send template to {from_number}: {e}")
-                return PlainTextResponse("OK")
+            send_manka_menu_template(to=from_number)
+            return PlainTextResponse("OK")
 
         # =====================================================
-        # OPTION 3 — Send nakopesheka Template (Flow Button)
+        # Option 3: Send Template with Flow Button
         # =====================================================
         if incoming_msg == "3":
             send_meta_whatsapp_template(
@@ -159,14 +207,13 @@ async def whatsapp_menu(data: dict):
             return PlainTextResponse("OK")
 
         # =====================================================
-        # OPTION 4 — Start Loan Calculator
+        # Option 4: Start Loan Calculator
         # =====================================================
         if incoming_msg == "4":
             user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
             send_meta_whatsapp_message(
                 from_number,
-                "Karibu kwenye Kikokotoo cha Mkopo!\n"
-                "Tafadhali ingiza kiasi unachotaka kukopa (Tsh):"
+                "Karibu! Ingiza kiasi unachotaka kukopa (Tsh):"
             )
             return PlainTextResponse("OK")
 
@@ -180,9 +227,9 @@ async def whatsapp_menu(data: dict):
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"❌ Error in whatsapp_menu: {e}")
+        logger.exception(f"❌ whatsapp_menu error: {e}")
         send_meta_whatsapp_message(
             from_number,
-            "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'."
+            "❌ Hitilafu imetokea. Jaribu tena."
         )
         return PlainTextResponse("Internal Server Error", status_code=500)
