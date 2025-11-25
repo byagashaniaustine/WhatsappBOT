@@ -1,6 +1,6 @@
 import logging
 from fastapi.responses import PlainTextResponse
-from services.meta import send_meta_whatsapp_message, send_manka_menu_template
+from services.meta import send_meta_whatsapp_message,send_manka_menu_template
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
@@ -9,62 +9,61 @@ logger.setLevel(logging.INFO)
 # Loan calculator helper
 # -------------------------------------------------------
 def calculate_loan(principal: float, duration: int, rate: float):
-    """
-    Monthly payment = principal * (1 + rate*duration)/duration
-    All in months
-    """
+    """Return monthly payment, total payment, and total interest."""
     monthly_payment = principal * (1 + (rate / 100) * duration) / duration
     total_payment = monthly_payment * duration
     total_interest = total_payment - principal
     return monthly_payment, total_payment, total_interest
 
 # -------------------------------------------------------
-# Unified WhatsApp flow handler
+# WhatsApp flow handler
 # -------------------------------------------------------
 async def whatsapp_menu(data: dict):
+    """
+    Handles both text messages and flow payloads.
+    Routes screens correctly and calculates loan results if needed.
+    """
     try:
         from_number = str(data.get("From") or "")
         if not from_number.startswith("+"):
             from_number = "+" + from_number
 
-        payload = data.get("Body")  # Could be text or flow payload
-
-        # ------------------------------------------
-        # Handle legacy or plain text messages
-        # ------------------------------------------
+        payload = data.get("Body")
         if not isinstance(payload, dict):
+            # Legacy text messages
             text = str(payload or "").strip().lower()
-            if text in ["hi", "start", "menu", "hello", "anza", "habari", "mambo"]:
-                # Send main menu template
+            if text in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
                 send_manka_menu_template(to=from_number)
+                logger.info(f"✅ Sent main menu template to {from_number}")
                 return PlainTextResponse("OK")
-            # Unknown text fallback
-            send_meta_whatsapp_message(
-                from_number,
-                "⚠️ Samahani, hatuwezi kuelewa mahitaji yako. Tafadhali tuma *menu* ili kuona menyu yetu."
-            )
-            return PlainTextResponse("OK")
-
-        # ------------------------------------------
-        # Handle flow payload
-        # ------------------------------------------
-        screen_id = payload.get("screen")
+            else:
+                # unrecognized input → polite Swahili response + menu template
+                send_meta_whatsapp_message(
+                    from_number,
+                    "Samahani, sielewi kilichotumwa. Tafadhali angalia menyu yetu chini."
+                )
+                send_manka_menu_template(to=from_number)
+                logger.info(f"⚠️ Sent fallback message + main menu to {from_number}")
+                return PlainTextResponse("OK")
+        # Extract screen info
+        current_screen_id = payload.get("screen")
         action = payload.get("action")
         user_data = payload.get("data", {})
 
-        logger.info(f"Flow payload: screen={screen_id}, action={action}, user={from_number}")
+        # Determine next screen
+        next_screen_id = user_data.get("next_screen") or current_screen_id
 
-        # ---------------------------------------------------
-        # Handle Loan Calculator screen
-        # ---------------------------------------------------
-        if screen_id == "LOAN_CALCULATOR" and action == "data_exchange":
+        logger.info(f"Payload received: current_screen={current_screen_id}, next_screen={next_screen_id}, action={action}, user={from_number}")
+
+        # ----------------------------
+        # Loan Calculator Submission
+        # ----------------------------
+        if next_screen_id == "LOAN_CALCULATOR" and action == "data_exchange":
             try:
-                # Extract values from form
                 principal = float(user_data.get("principal", 0))
                 duration = int(user_data.get("duration", 1))
                 rate = float(user_data.get("rate", 0))
 
-                # Compute loan results
                 monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
 
                 # Prepare LOAN_RESULT screen
@@ -82,23 +81,26 @@ async def whatsapp_menu(data: dict):
                 return PlainTextResponse(response_screen)
 
             except Exception as e:
-                logger.error(f"Loan calculation error: {e}")
+                logger.error(f"Loan calculation failed: {e}")
                 return PlainTextResponse({
                     "screen": "ERROR",
-                    "data": {"error_message": "Kikokotoo cha mkopo kimeshindwa"}
+                    "data": {"error_message": "Loan calculation failed"}
                 })
 
-        # ---------------------------------------------------
-        # Handle completion of a flow
-        # ---------------------------------------------------
+        # ----------------------------
+        # Complete Flow
+        # ----------------------------
         if action == "complete":
-            return PlainTextResponse({"screen": "MAIN_MENU", "data": {}})
+            return PlainTextResponse({
+                "screen": "MAIN_MENU",
+                "data": {}
+            })
 
-        # ---------------------------------------------------
-        # All other screens: continue the flow without modification
-        # ---------------------------------------------------
+        # ----------------------------
+        # Default: forward the payload to next screen
+        # ----------------------------
         return PlainTextResponse({
-            "screen": screen_id,
+            "screen": next_screen_id,
             "data": user_data
         })
 
