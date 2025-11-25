@@ -1,12 +1,12 @@
 import logging
 from fastapi.responses import PlainTextResponse
-from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_template
+from services.meta import send_meta_whatsapp_message, send_meta_whatsapp_template, send_manka_menu_template
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
 # =====================================================
-# MAIN MENU
+# MAIN MENU (Kept for reference but now using template)
 # =====================================================
 main_menu = {
     "1": "Fahamu kuhusu Alama za Mikopo (Credit Score)",
@@ -128,36 +128,43 @@ async def whatsapp_menu(data: dict):
             return PlainTextResponse("OK")
 
         # =====================================================
-        # SHOW MAIN MENU
+        # SHOW MAIN MENU - NOW SENDS TEMPLATE INSTEAD OF TEXT
         # =====================================================
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
-            menu_list = "\n".join([f"*{k}* - {v}" for k, v in main_menu.items()])
-            send_meta_whatsapp_message(
-                from_number,
-                f"👋 *Karibu kwenye Huduma za Mikopo!*\n\n"
-                "Chagua huduma kwa kutuma namba:\n\n" + menu_list
-            )
-            return PlainTextResponse("OK")
+            try:
+                logger.info(f"👋 User {from_number} initiated conversation - sending manka_menu template")
+                
+                # Send the manka_menu template with flow button
+                send_manka_menu_template(to=from_number)
+                
+                logger.info(f"✅ Successfully sent manka_menu template to {from_number}")
+                return PlainTextResponse("OK")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to send template to {from_number}: {e}")
+                
+                # Fallback to text menu if template fails
+                menu_list = "\n".join([f"*{k}* - {v}" for k, v in main_menu.items()])
+                send_meta_whatsapp_message(
+                    from_number,
+                    f"👋 *Karibu kwenye Huduma za Mikopo!*\n\n"
+                    "Chagua huduma kwa kutuma namba:\n\n" + menu_list
+                )
+                return PlainTextResponse("OK")
 
         # =====================================================
-        # HANDLE USER OPTION SELECTION
+        # HANDLE USER OPTION SELECTION (Legacy text menu)
         # =====================================================
         if incoming_msg in main_menu:
 
             # -------------------------------------------------
-            # OPTION 3 — Send Template With Flow Button
+            # OPTION 3 — Send nakopesheka Template
             # -------------------------------------------------
             if incoming_msg == "3":
                 send_meta_whatsapp_template(
                     to=from_number,
-                    template_name="nakopesheka_template",
-                    language_code="en_US",
-                    components=[
-                        {
-                            "type": "body",
-                            "parameters": []
-                        }
-                    ]
+                    template_name="nakopeshekaa_1",  # Fixed: correct template name
+                    language_code="en"
                 )
                 return PlainTextResponse("OK")
 
@@ -188,7 +195,7 @@ async def whatsapp_menu(data: dict):
         # =====================================================
         send_meta_whatsapp_message(
             from_number,
-            "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kuanza tena."
+            "⚠️ Samahani, sielewi chaguo lako. Tuma *menu* kupata menyu kuu."
         )
         return PlainTextResponse("OK")
 
