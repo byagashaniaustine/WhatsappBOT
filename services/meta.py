@@ -29,7 +29,16 @@ logger.info(f"*** DEBUG: Using PHONE_NUMBER_ID: {PHONE_NUMBER_ID} for API_URL: {
 # SEND SIMPLE WHATSAPP TEXT MESSAGE
 # ==============================================================
 def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
-    # NOTE: wa_id is included for compatibility with caller but not used here.
+    """
+    Send a simple text message via WhatsApp.
+    
+    Args:
+        to: Recipient phone number (with country code)
+        body: Message text content
+    
+    Returns:
+        API response as dictionary
+    """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
 
@@ -133,17 +142,46 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
     Returns:
         API response as dictionary
     """
+    # Define the flow button component required by the manka_menu template
+    components = [
+        {
+            "type": "button",
+            "sub_type": "flow",
+            "index": "0",
+            "parameters": [
+                {
+                    "type": "action",
+                    "action": {
+                        "flow_token": "unused",
+                        "flow_action_data": {
+                            "screen": "MAIN_MENU"
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+    
     return send_meta_whatsapp_template(
         to=to,
         template_name="manka_menu",
-        language_code="en"
-        # No components needed - the template has default flow button
+        language_code="en",
+        components=components
     )
 
 # ==============================================================
 # GET MEDIA DOWNLOAD URL
 # ==============================================================
 def get_media_url(media_id: str) -> str:
+    """
+    Get the download URL for a media file from WhatsApp.
+    
+    Args:
+        media_id: The media ID from WhatsApp
+    
+    Returns:
+        Download URL as string
+    """
     if not ACCESS_TOKEN:
         raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
 

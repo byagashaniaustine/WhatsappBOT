@@ -136,20 +136,11 @@ async def whatsapp_menu(data: dict):
                 
                 # Send the manka_menu template with flow button
                 send_manka_menu_template(to=from_number)
-                
                 logger.info(f"✅ Successfully sent manka_menu template to {from_number}")
                 return PlainTextResponse("OK")
                 
             except Exception as e:
                 logger.error(f"❌ Failed to send template to {from_number}: {e}")
-                
-                # Fallback to text menu if template fails
-                menu_list = "\n".join([f"*{k}* - {v}" for k, v in main_menu.items()])
-                send_meta_whatsapp_message(
-                    from_number,
-                    f"👋 *Karibu kwenye Huduma za Mikopo!*\n\n"
-                    "Chagua huduma kwa kutuma namba:\n\n" + menu_list
-                )
                 return PlainTextResponse("OK")
 
         # =====================================================
