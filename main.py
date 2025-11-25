@@ -198,6 +198,7 @@ async def debug_test(request: Request):
     logger.debug(f"[DEBUG] Raw Body Length: {len(raw_body)} bytes.")
     return PlainTextResponse("Debug check successful. Check logs for CRITICAL messages.", status_code=200)
 
+# ... keep all your imports, logging setup, key loading, FLOW_DEFINITIONS, etc. as you have above ...
 
 # --- WEBHOOK HANDLER (POST) ---
 @app.post("/whatsapp-webhook/")
@@ -206,147 +207,61 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     
     try:
         raw_body = await request.body()
-        
         body_log = raw_body.decode('utf-8', errors='ignore')
         if len(body_log) > 500:
             body_log = body_log[:500] + "..."
         logger.debug(f"Incoming RAW Body (Truncated): {body_log}")
 
         payload = json.loads(raw_body.decode('utf-8'))
-        
         logger.info("Successfully parsed payload as JSON. Proceeding to processing.")
 
-        # ---- Encrypted Flow Payload Handling ----
+        # -------------------------------
+        # Check for Encrypted Flow Payload
+        # -------------------------------
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
-
         is_flow_payload = encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64
 
         if is_flow_payload:
             try:
-                # 1️⃣ Decode and decrypt AES key with RSA (UNCHANGED CORE)
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
-                if len(encrypted_aes_key_bytes) != PRIVATE_KEY.size_in_bytes():
-                    raise ValueError(f"Ciphertext length mismatch.")
-                
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
-                logger.info(f"✅ AES key successfully decrypted.")
 
-                # 2️⃣ Decode IV and encrypted flow (UNCHANGED CORE)
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
-
-                # 3️⃣ Decrypt AES-GCM (UNCHANGED CORE)
                 ciphertext = encrypted_flow_bytes[:-16]
                 tag = encrypted_flow_bytes[-16:]
+
                 cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
                 logger.info(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
-                # 5️⃣ Flow Logic: Select the correct flow and response
-                action = decrypted_data.get("action")
-                flow_token = decrypted_data.get("flow_token")
-                
-                # Identify the flow ID
-                flow_id_key = decrypted_data.get("data", {}).get("flow_id", "LOAN_FLOW_ID_1") 
-                
-                current_flow_screens = FLOW_DEFINITIONS.get(flow_id_key)
-                
-                if action == "ping":
-                    response_obj = FLOW_DEFINITIONS["HEALTH_CHECK_PING"]
+                # -------------------------------
+                # Pass payload to whatsapp_menu
+                # -------------------------------
+                from_number = decrypted_data.get("from_number")
+                if from_number:
+                    background_tasks.add_task(
+                        whatsapp_menu,
+                        {
+                            "From": from_number,
+                            "flow": True,
+                            "payload": decrypted_data
+                        }
+                    )
+                    logger.info(f"📤 Flow payload sent to whatsapp_menu for {from_number}")
 
-                # 1. Check for success action based on the identified flow 
-                elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
-                    # FINAL ACTION: Exiting the flow.
-                    
-                    response_obj = json.loads(json.dumps(current_flow_screens["SUCCESS_RESPONSE"])) 
-                    
-                    if flow_token:
-                        success_params = response_obj["data"]["extension_message_response"]["params"]
-                        success_params["flow_token"] = flow_token
-                        logger.info(f"Flow {flow_id_key} finalized. Token successfully replaced.")
-                
-                elif not current_flow_screens:
-                    response_obj = FLOW_DEFINITIONS["ERROR"]
-                    response_obj["data"]["error_message"] = f"Unknown Flow ID: {flow_id_key}"
+                # Optionally respond immediately to Meta server with 200 OK
+                return PlainTextResponse("OK")
 
-                elif action == "INIT":
-                    # For INIT, return the first screen of the detected flow.
-                    if flow_id_key == "LOAN_FLOW_ID_1":
-                        response_obj = current_flow_screens["LOAN"]
-                    elif flow_id_key == "ACCOUNT_FLOW_ID_2":
-                        response_obj = current_flow_screens["PROFILE"]
-                    else:
-                        response_obj = FLOW_DEFINITIONS["ERROR"]
-                        response_obj["data"]["error_message"] = f"INIT failed in Unknown Flow: {flow_id_key}"
-                
-                elif action == "data_exchange":
-                    user_data = decrypted_data.get("data", {})
-                    current_screen = decrypted_data.get("screen", "UNKNOWN")
-                    logger.info(f"Processing data_exchange from Flow {flow_id_key}, Screen: {current_screen}, Data: {user_data}")
-                    
-                    if flow_id_key == "LOAN_FLOW_ID_1":
-                        # Flow 1 Logic: LOAN -> CONFIRM
-                        if current_screen == "LOAN":
-                            amount = user_data.get("amount", "50000")
-                            duration = user_data.get("duration", "30")
-                            response_obj = json.loads(json.dumps(current_flow_screens["CONFIRM"]))
-                            response_obj["data"]["loan_amount"] = amount
-                            response_obj["data"]["loan_duration"] = duration
-                        else:
-                             response_obj = FLOW_DEFINITIONS["ERROR"] 
-
-                    elif flow_id_key == "ACCOUNT_FLOW_ID_2":
-                        # Flow 2 Logic: PROFILE_UPDATE -> SUMMARY
-                        if current_screen == "PROFILE_UPDATE":
-                            new_name = user_data.get("name", "N/A")
-                            new_email = user_data.get("email", "N/A")
-                            response_obj = json.loads(json.dumps(current_flow_screens["SUMMARY"]))
-                            response_obj["data"]["submitted_name"] = new_name
-                            response_obj["data"]["submitted_email"] = new_email
-                        else:
-                            response_obj = FLOW_DEFINITIONS["ERROR"] 
-                        
-                    else:
-                        response_obj = FLOW_DEFINITIONS["ERROR"]
-                        response_obj["screen"] = current_screen
-                        response_obj["data"]["error_message"] = f"data_exchange failed in Unknown Flow: {flow_id_key}"
-                
-                else:
-                    # Default fallback: Handle any unknown or unhandled action
-                    current_screen = decrypted_data.get("screen", "ERROR")
-                    response_obj = FLOW_DEFINITIONS["ERROR"]
-                    response_obj["screen"] = current_screen
-                    response_obj["data"]["error_message"] = f"Action '{action}' not handled in Flow {flow_id_key}."
-                
-                # Final response object to be encrypted
-                response = response_obj
-                # -----------------------------------------------------------------
-
-                # 6️⃣ Return encrypted response in base64 (MANDATORY for Flow) (UNCHANGED CORE)
-                flipped_iv = bytes([b ^ 0xFF for b in iv]) 
-                cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
-                response_json_string = json.dumps(response)
-                encrypted_resp_bytes, resp_tag = cipher_resp.encrypt_and_digest(response_json_string.encode("utf-8"))
-                full_resp = encrypted_resp_bytes + resp_tag
-                full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
-                
-                logger.info(f"Encrypted flow response generated successfully and returning 200 OK. Next Screen: {response['screen']}")
-
-                return PlainTextResponse(full_resp_b64)
-
-            except ValueError as e:
-                logger.error(f"⚠️ Security/Decryption Failed: ValueError: {e}")
-                return PlainTextResponse("Decryption or data verification failed. Check RSA key pair.", status_code=400)
-            
             except Exception as e:
-                logger.exception(f"General Flow Decryption Error: {e}")
-                return PlainTextResponse("Failed to decrypt flow payload due to internal error.", status_code=500)
+                logger.exception(f"⚠️ Flow Decryption Error: {e}")
+                return PlainTextResponse("Failed to decrypt flow payload.", status_code=500)
 
-        # ---- Regular WhatsApp message handling (Swahili Media Error) ----
+        # ---- Regular WhatsApp message handling (text/media) ----
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -362,12 +277,18 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         if not from_number:
             return PlainTextResponse("OK")
 
+        # -------------------------------
+        # Text Messages
+        # -------------------------------
         if msg_type == "text":
             user_text = message.get("text", {}).get("body", "")
             logger.info(f"💬 Message from {from_number}: {user_text}")
             background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
             return PlainTextResponse("OK")
 
+        # -------------------------------
+        # Media Messages
+        # -------------------------------
         if msg_type in ["image", "document", "audio", "video"]:
             media_data = message.get(msg_type, {})
             media_id = media_data.get("id")
@@ -381,14 +302,12 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 )
                 return PlainTextResponse("OK")
 
-            # Notify user immediately
             background_tasks.add_task(
                 send_meta_whatsapp_message,
                 from_number,
                 "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
             )
 
-            # Continue processing in background
             def process_job():
                 media_url = get_media_url(media_id)
                 process_file_upload(
@@ -407,6 +326,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             background_tasks.add_task(process_job)
             return PlainTextResponse("OK")
 
+        # -------------------------------
+        # Unknown message type
+        # -------------------------------
         background_tasks.add_task(
             send_meta_whatsapp_message,
             from_number,
