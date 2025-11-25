@@ -1,196 +1,162 @@
+# file: main.py
 import os
 import json
 import base64
 import logging
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
-
-# Cryptography
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Cipher import PKCS1_OAEP,AES
 from Crypto.Hash import SHA256
 
-# Your project modules
-from api.whatsappBOT import whatsapp_menu
-from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message, get_media_url
+# -------------------------------
+# Config & Logging
+# -------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("whatsapp_flows")
+logger.setLevel(logging.INFO)
 
-# -------------------------------
-# Logging Setup
-# -------------------------------
-logger = logging.getLogger("whatsapp_app")
-logger.setLevel(logging.DEBUG)
-
-# -------------------------------
-# FastAPI App
-# -------------------------------
 app = FastAPI()
 
-WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
-PRIVATE_KEY_STR = os.environ.get("PRIVATE_KEY")
-if not PRIVATE_KEY_STR:
-    raise RuntimeError("PRIVATE_KEY env variable not set")
+WEBHOOK_VERIFY_TOKEN = os.environ["WEBHOOK_VERIFY_TOKEN"]
+PRIVATE_KEY_PEM = os.environ["PRIVATE_KEY"].replace("\\n", "\n")
+FLOW_AES_KEY = base64.b64decode(os.environ["FLOW_AES_KEY"])  # 32-byte key for v7 data_exchange
+
+# Your Flow Asset ID (get from Meta dashboard)
+FLOW_ID = os.environ["FLOW_ID"]
 
 # -------------------------------
-# Load Private Key + RSA Cipher
+# RSA Setup (for decrypting AES key from Meta)
 # -------------------------------
-def load_private_key(key_string: str) -> RSA.RsaKey:
-    key_string = key_string.replace("\\n", "\n").replace("\r\n", "\n")
-    return RSA.import_key(key_string)
-
-PRIVATE_KEY = load_private_key(PRIVATE_KEY_STR)
-RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
+private_key = RSA.import_key(PRIVATE_KEY_PEM)
+rsa_cipher = PKCS1_OAEP.new(private_key, hashAlgo=SHA256)
 
 # -------------------------------
-# Webhook Verification
+# Helper: Send Flow Message (use your existing function)
 # -------------------------------
-@app.get("/whatsapp-webhook/")
-async def verify_webhook(request: Request):
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
+from services.meta import send_interactive_message  # ← your existing function
+
+def restart_flow(phone: str, screen_id: str, data: dict = None):
+    send_interactive_message(
+        to=phone,
+        type="flow",
+        flow_id=FLOW_ID,
+        initial_screen_id=screen_id,
+        data=data or {}
+    )
+
+# -------------------------------
+# 1. Webhook Verification
+# -------------------------------
+@app.get("/webhook")
+async def verify(mode: str = None, token: str = None, challenge: str = None):
     if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
         return PlainTextResponse(challenge)
-    raise HTTPException(status_code=403, detail="Verification failed")
+    raise HTTPException(403)
 
 # -------------------------------
-# Debug / Health Check Endpoint
+# 2. MAIN WEBHOOK (Handles complete, pings, etc.)
 # -------------------------------
-@app.post("/debug-test/")
-async def debug_test(request: Request):
-    logger.critical(f"✅ Debug endpoint hit from {request.client.host if request.client else 'Unknown'}")
-    return PlainTextResponse("Debug check successful. Check logs.", status_code=200)
-
-# -------------------------------
-# WhatsApp Webhook (POST)
-# Handles Flows + Text + Media
-# -------------------------------
-@app.post("/whatsapp-webhook/")
-async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
+@app.post("/webhook")
+async def webhook(request: Request):
     try:
-        raw_body = await request.body()
-        payload_str = raw_body.decode("utf-8", errors="ignore")
-        logger.debug(f"Incoming raw payload (truncated 500 chars): {payload_str[:500]}")
+        payload = await request.json()
+        for entry in payload.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value", {})
+                messages = value.get("messages", [])
+                flows = value.get("flows", [])
 
-        payload = json.loads(payload_str)
+                # Handle Flow "complete" action
+                for flow in flows:
+                    if flow.get("action") == "complete":
+                        phone = flow["from"]
+                        user_data = flow.get("data", {})
 
-        # -------------------------------
-        # Check for Flow payload
-        # -------------------------------
-        encrypted_flow_b64 = payload.get("encrypted_flow_data")
-        encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
-        iv_b64 = payload.get("initial_vector")
+                        jump_to = user_data.get("jump_to")
+                        if jump_to:
+                            logger.info(f"Dynamic jump to {jump_to} for {phone}")
+                            restart_flow(phone, jump_to)
+                        return {"status": "ok"}
 
-        if encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64:
-            try:
-                # Decode & decrypt AES key
-                aes_key = RSA_CIPHER.decrypt(base64.b64decode(encrypted_aes_key_b64))
-                iv = base64.b64decode(iv_b64)
+                # Handle regular messages if needed
+                for msg in messages:
+                    if msg["type"] == "text":
+                        phone = msg["from"]
+                        # Optional: restart menu
+                        restart_flow(phone, "MAIN_MENU")
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"error": str(e)}, 500
 
-                # AES GCM decrypt
-                encrypted_bytes = base64.b64decode(encrypted_flow_b64)
-                ciphertext, tag = encrypted_bytes[:-16], encrypted_bytes[-16:]
-                cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
-                decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
-                decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
+# -------------------------------
+# 3. DATA_EXCHANGE ENDPOINT (v7+ Flows)
+# -------------------------------
+@app.post("/api/flow-router")
+async def flow_data_exchange(request: Request):
+    try:
+        body = await request.json()
+        exchange = body["data_exchange"]
+        payload_in = exchange["payload"]
 
-                logger.info(f"📥 Decrypted Flow payload: {json.dumps(decrypted_data, indent=2)}")
+        # Support both old and new encryption formats
+        encrypted_aes_key_b64 = payload_in.get("encrypted_aes_key")
+        encrypted_data_b64 = payload_in.get("encrypted_flow_data") or payload_in.get("encrypted_data")
+        iv_b64 = payload_in.get("initial_vector") or payload_in.get("iv")
 
-                # Send to whatsapp_menu in background
-                from_number = decrypted_data.get("from_number")
-                if from_number:
-                    background_tasks.add_task(
-                        whatsapp_menu,
-                        {"From": from_number, "payload": decrypted_data, "flow": True}
-                    )
-                    logger.info(f"📤 Flow payload sent to whatsapp_menu for {from_number}")
+        if not all([encrypted_aes_key_b64, encrypted_data_b64, iv_b64]):
+            raise ValueError("Missing encryption fields")
 
-                # Always respond 200 OK immediately for Flow health check
-                return PlainTextResponse("OK")
+        # Decrypt AES key
+        aes_key = rsa_cipher.decrypt(base64.b64decode(encrypted_aes_key_b64))
+        iv = base64.b64decode(iv_b64)
+        encrypted_bytes = base64.b64decode(encrypted_data_b64)
+        ciphertext, tag = encrypted_bytes[:-16], encrypted_bytes[-16:]
 
-            except Exception as e:
-                logger.exception(f"⚠️ Flow decryption failed: {e}")
-                return PlainTextResponse("Failed to decrypt flow payload.", status_code=500)
+        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+        decrypted = cipher.decrypt_and_verify(ciphertext, tag)
+        user_data = json.loads(decrypted.decode())
 
-        # -------------------------------
-        # Legacy Text / Media Messages
-        # -------------------------------
-        entry = payload.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
+        logger.info(f"Received from user: {user_data}")
 
-        if not messages:
-            return PlainTextResponse("OK")
+        # YOUR DYNAMIC ROUTING LOGIC
+        selected = user_data.get("selected_service") or user_data.get("go_to") or user_data.get("selected")
 
-        message = messages[0]
-        from_number = message.get("from")
-        msg_type = message.get("type")
+        screen_map = {
+            "CREDIT_SCORE": "CREDIT_SCORE",
+            "CREDIT_BANDWIDTH": "CREDIT_BANDWIDTH",
+            "LOAN_CALCULATOR": "LOAN_CALCULATOR",
+            "LOAN_TYPES": "LOAN_TYPES",
+            "SERVICES": "SERVICES"
+        }
+        target_screen = screen_map.get(selected, "MAIN_MENU")
 
-        if not from_number:
-            return PlainTextResponse("OK")
+        # Response: tell system to complete and jump
+        response_data = {"jump_to": target_screen}
+        resp_json = json.dumps(response_data).encode()
 
-        # -------------------------------
-        # Text Messages
-        # -------------------------------
-        if msg_type == "text":
-            user_text = message.get("text", {}).get("body", "")
-            logger.info(f"💬 Text from {from_number}: {user_text}")
-            background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
-            return PlainTextResponse("OK")
+        # Encrypt response
+        resp_iv = os.urandom(12)
+        resp_cipher = AES.new(aes_key, AES.MODE_GCM, nonce=resp_iv)
+        resp_ct, resp_tag = resp_cipher.encrypt_and_digest(resp_json)
 
-        # -------------------------------
-        # Media Messages
-        # -------------------------------
-        if msg_type in ["image", "document", "audio", "video"]:
-            media_data = message.get(msg_type, {})
-            media_id = media_data.get("id")
-            mime_type = media_data.get("mime_type")
+        encrypted_resp = base64.b64encode(resp_ct + resp_tag).decode()
+        encrypted_iv = base64.b64encode(resp_iv).decode()
 
-            if not media_id:
-                background_tasks.add_task(
-                    send_meta_whatsapp_message,
-                    from_number,
-                    "Samahani, faili halikupatikana."
-                )
-                return PlainTextResponse("OK")
-
-            # Notify user processing
-            background_tasks.add_task(
-                send_meta_whatsapp_message,
-                from_number,
-                "*Faili limepokelewa.*\n🔄 Linafanyiwa uchambuzi...\nTafadhali subiri."
-            )
-
-            # Process file in background
-            def process_job():
-                media_url = get_media_url(media_id)
-                process_file_upload(
-                    user_id=from_number,
-                    user_name="",
-                    user_phone=from_number,
-                    flow_type="whatsapp_upload",
-                    media_url=media_url,
-                    mime_type=mime_type
-                )
-                send_meta_whatsapp_message(
-                    from_number,
-                    "✅ *Uchambuzi wa faili umekamilika.*\nAsante kwa kuchagua huduma zetu."
-                )
-
-            background_tasks.add_task(process_job)
-            return PlainTextResponse("OK")
-
-        # -------------------------------
-        # Unknown Message Type
-        # -------------------------------
-        background_tasks.add_task(
-            send_meta_whatsapp_message,
-            from_number,
-            f"Samahani, siwezi kusoma ujumbe wa aina: {msg_type}"
-        )
-        return PlainTextResponse("OK")
+        return {
+            "version": "3.0",
+            "data_exchange": {
+                "id": exchange["id"],
+                "payload": {
+                    "encrypted_flow_data": encrypted_resp,
+                    "encrypted_aes_key": encrypted_aes_key_b64,  # echo back
+                    "initial_vector": encrypted_iv
+                }
+            }
+        }
 
     except Exception as e:
-        logger.exception(f"❌ Webhook error: {e}")
-        return PlainTextResponse("Internal Server Error", status_code=500)
+        logger.exception(f"data_exchange failed: {e}")
+        raise HTTPException(500, "Processing failed")
