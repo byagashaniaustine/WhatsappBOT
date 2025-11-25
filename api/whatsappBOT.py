@@ -6,18 +6,6 @@ logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.INFO)
 
 # =====================================================
-# MAIN MENU (Kept for reference but now using template)
-# =====================================================
-main_menu = {
-    "1": "Fahamu kuhusu Alama za Mikopo (Credit Score)",
-    "2": "Kiwango cha Mkopo (Credit Bandwidth)",
-    "3": "Nakopesheka!! (Uwezo wa Kukopa) - Template + Flow",
-    "4": "Kikokotoo cha Mkopo (Loan Calculator)",
-    "5": "Aina za Mikopo",
-    "6": "Huduma za Mikopo"
-}
-
-# =====================================================
 # USER STATES
 # =====================================================
 user_states = {}  
@@ -40,7 +28,6 @@ def calculate_monthly_payment(principal: float, duration: int, rate_percent: flo
 
     return total_payment / months if months else total_payment
 
-
 # =====================================================
 # MAIN WHATSAPP BOT FUNCTION
 # =====================================================
@@ -53,8 +40,28 @@ async def whatsapp_menu(data: dict):
         if not from_number.startswith("+"):
             from_number = "+" + from_number
 
-        incoming_msg = str(data.get("Body") or "").strip().lower()
+        incoming_msg = data.get("Body")  # could be str (text) or dict (flow payload)
         state = user_states.get(from_number)
+
+        # ------------------------------------------
+        # Handle dynamic flow payload
+        # ------------------------------------------
+        if isinstance(incoming_msg, dict):
+            screen = data.get("screen")
+            flow_id = data.get("flow_id")
+            logger.info(f"📥 Received flow payload from {from_number}, Screen: {screen}, Flow ID: {flow_id}")
+
+            # Map known flow keys to legacy numeric/text commands
+            if "menu_selection" in incoming_msg:
+                incoming_msg = str(incoming_msg["menu_selection"])
+            elif "step_command" in incoming_msg:
+                incoming_msg = str(incoming_msg["step_command"])
+            else:
+                # fallback: stringify all data for logging/debug
+                incoming_msg = str(incoming_msg)
+
+        else:
+            incoming_msg = str(incoming_msg or "").strip().lower()
 
         # =====================================================
         # LOAN CALCULATOR FLOW STEPS
@@ -128,56 +135,38 @@ async def whatsapp_menu(data: dict):
             return PlainTextResponse("OK")
 
         # =====================================================
-        # SHOW MAIN MENU - NOW SENDS TEMPLATE INSTEAD OF TEXT
+        # SHOW MAIN MENU TEMPLATE
         # =====================================================
         if incoming_msg in ["hi", "hello", "start", "menu", "anza", "habari", "mambo"]:
             try:
                 logger.info(f"👋 User {from_number} initiated conversation - sending manka_menu template")
-                
-                # Send the manka_menu template with flow button
                 send_manka_menu_template(to=from_number)
                 logger.info(f"✅ Successfully sent manka_menu template to {from_number}")
                 return PlainTextResponse("OK")
-                
             except Exception as e:
                 logger.error(f"❌ Failed to send template to {from_number}: {e}")
                 return PlainTextResponse("OK")
 
         # =====================================================
-        # HANDLE USER OPTION SELECTION (Legacy text menu)
+        # OPTION 3 — Send nakopesheka Template (Flow Button)
         # =====================================================
-        if incoming_msg in main_menu:
+        if incoming_msg == "3":
+            send_meta_whatsapp_template(
+                to=from_number,
+                template_name="nakopeshekaa_1",
+                language_code="en"
+            )
+            return PlainTextResponse("OK")
 
-            # -------------------------------------------------
-            # OPTION 3 — Send nakopesheka Template
-            # -------------------------------------------------
-            if incoming_msg == "3":
-                send_meta_whatsapp_template(
-                    to=from_number,
-                    template_name="nakopeshekaa_1",  # Fixed: correct template name
-                    language_code="en"
-                )
-                return PlainTextResponse("OK")
-
-            # -------------------------------------------------
-            # OPTION 4 — Start Loan Calculator
-            # -------------------------------------------------
-            if incoming_msg == "4":
-                user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
-                send_meta_whatsapp_message(
-                    from_number,
-                    "Karibu kwenye Kikokotoo cha Mkopo!\n"
-                    "Tafadhali ingiza kiasi unachotaka kukopa (Tsh):"
-                )
-                return PlainTextResponse("OK")
-
-            # -------------------------------------------------
-            # OTHER MENU OPTIONS → Simple replies
-            # -------------------------------------------------
-            title = main_menu[incoming_msg]
+        # =====================================================
+        # OPTION 4 — Start Loan Calculator
+        # =====================================================
+        if incoming_msg == "4":
+            user_states[from_number] = {"mode": "LOAN_CALC", "step": 1, "data": {}}
             send_meta_whatsapp_message(
                 from_number,
-                f"*{title}*\n\nTafadhali angalia huduma hii kupitia flow yetu ya WhatsApp."
+                "Karibu kwenye Kikokotoo cha Mkopo!\n"
+                "Tafadhali ingiza kiasi unachotaka kukopa (Tsh):"
             )
             return PlainTextResponse("OK")
 
@@ -192,7 +181,6 @@ async def whatsapp_menu(data: dict):
 
     except Exception as e:
         logger.exception(f"❌ Error in whatsapp_menu: {e}")
-
         send_meta_whatsapp_message(
             from_number,
             "❌ Hitilafu imetokea. Tafadhali jaribu tena au tuma 'menu'."
