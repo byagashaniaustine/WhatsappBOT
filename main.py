@@ -149,10 +149,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 current_flow_screens = FLOW_DEFINITIONS.get(flow_id_key)
                 response_obj = None
 
-                # 🔥 CRITICAL FIX: Ensure minimal and compliant PING response for health check
+                # 🔥 CRITICAL FIX: Ensure minimal STATUS response for health check
                 if action == "ping":
-                    response_obj = {"screen": "MAIN_MENU", "data": {"active"}}
-                    logger.critical("✅ [PING] Responded with explicit MAIN_MENU payload for health check.")
+                    # Meta expects {"data": {"status": "active"}} for health checks
+                    response_obj = {"data": {"status": "active"}}
+                    logger.critical("✅ [PING] Responded with explicit STATUS data for health check.")
                 
                 elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
                     response_obj = json.loads(json.dumps(current_flow_screens["SUCCESS_RESPONSE"])) 
