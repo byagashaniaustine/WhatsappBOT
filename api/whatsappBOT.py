@@ -72,7 +72,7 @@ def calculate_loan_results(user_data: dict):
             "total_interest": f"{total_interest:,.0f}"
         }
     }
-    logger.critical(f"➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
+    logger.critical(f"{response_screen} is answer➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
     return response_screen
 
 
