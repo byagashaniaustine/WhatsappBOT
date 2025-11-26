@@ -44,6 +44,12 @@ FLOW_DEFINITIONS = {
         # Placeholder screens for other menu options (if needed)
         "CREDIT_SCORE": {"screen": "CREDIT_SCORE", "data": {}},
         "LOAN_TYPES": {"screen": "LOAN_TYPES", "data": {}},
+        "SERVICES": {"screen": "SERVICES", "data": {}}, # Added SERVICES
+        
+        # --- NEW AFFORDABILITY SCREENS ---
+        "AFFORDABILITY_CHECK": {"screen": "AFFORDABILITY_WELCOME", "data": {}},
+        "DOCUMENT_REQUEST": {"screen": "DOCUMENT_REQUEST", "data": {}},
+        # --------------------------------
         
         # The SUCCESS action and response can remain, assuming SUBMIT_LOAN is the final action.
         "SUCCESS_ACTION": "SUBMIT_LOAN",
@@ -200,7 +206,15 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     # 2. LOAN FLOW ROUTING (LOAN_FLOW_ID_1)
                     elif flow_id_key == "LOAN_FLOW_ID_1":
                         
-                        if current_screen == "MAIN_MENU":
+                        # --- Check for next_screen navigation data from content screens/AFFORDABILITY_WELCOME ---
+                        next_screen_key = user_data.get("next_screen")
+                        if next_screen_key and next_screen_key in FLOW_DEFINITIONS[flow_id_key]:
+                            # This handles the navigation from AFFORDABILITY_WELCOME to DOCUMENT_REQUEST
+                            # and any future back-to-menu buttons (if re-added).
+                            response_obj = {"screen": next_screen_key, "data": {}}
+                            logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
+                        
+                        elif current_screen == "MAIN_MENU":
                             # Route based on service selection
                             next_screen_id = user_data.get("selected_service")
                             
@@ -216,9 +230,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                 logger.critical("⚠️ WORKAROUND ACTIVATED: Unresolved token detected. Forcing route to LOAN_CALCULATOR.")
 
                             # Ensure all valid screens are included in the check
-                            valid_screens = ["CREDIT_SCORE", "CREDIT_BANDWIDTH", "LOAN_CALCULATOR", "LOAN_TYPES", "SERVICES"]
+                            valid_screens = ["CREDIT_SCORE", "CREDIT_BANDWIDTH", "LOAN_CALCULATOR", "LOAN_TYPES", "SERVICES", "AFFORDABILITY_CHECK"]
                             
                             if next_screen_id in valid_screens:
+                                # This covers the initial route to AFFORDABILITY_CHECK
                                 response_obj = {"screen": next_screen_id, "data": {}}
                             else:
                                 response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Chaguo batili."}}
@@ -235,10 +250,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             except Exception:
                                 response_obj = FLOW_DEFINITIONS["ERROR"]
 
-                        elif current_screen == "LOAN_RESULT":
-                            # User is confirming or trying to go back/exit from result screen
-                             response_obj = {"screen": "MAIN_MENU", "data": {}}
-
+                        # No explicit data_exchange handler needed for LOAN_RESULT or DOCUMENT_REQUEST as they are terminal/completion screens
+                        # unless they explicitly had a button to navigate back/forward (which we removed).
+                        # The general `next_screen` logic above covers the AFFORDABILITY_WELCOME button.
+                        
                         else:
                             # Fallback for unhandled LOAN_FLOW_ID_1 screens
                             response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Kosa: Sehemu ya huduma haikupatikana."}}
