@@ -129,7 +129,11 @@ async def debug_test(request: Request):
     return PlainTextResponse("Debug check successful. Check logs for CRITICAL messages.", status_code=200)
 
 
-# ----------------------------------------------------------------------@app.post("/whatsapp-webhook/")
+# ----------------------------------------------------------------------
+## 🚀 WEBHOOK HANDLER (POST) - All Flow Routing and Message Handling
+# ----------------------------------------------------------------------
+
+@app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     logger.critical(f"🚀 [INIT] Webhook received POST request.")
     
