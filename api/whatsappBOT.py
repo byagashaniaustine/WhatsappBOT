@@ -56,7 +56,7 @@ async def whatsapp_menu(data: dict):
         user_text = payload.strip().upper()
         
         # Simple text logic (optional, but good for main menu access)
-        if user_text in ["MENU", "MWANZO"]:
+        if user_text in ["MENU","mambo","hi","hello","anza", "MWANZO"]:
             send_manka_menu_template(to=from_number)
             # CHANGED: logger.info -> logger.critical
             logger.critical("💬 Regular text: Sending menu template.")
