@@ -206,14 +206,19 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             
                             # 🎯 LOG RAW SELECTION and APPLY WORKAROUND
                             logger.critical(f"👀 MAIN_MENU Raw Selection: {next_screen_id}") 
-                            UNRESOLVED_TOKEN = "${main_menu_form.menu_selection.id}"
+                            
+                            # UPDATED UNRESOLVED TOKEN CHECK: Matches the exact placeholder used in the Flow JSON payload: "${form.menu_selection}"
+                            UNRESOLVED_TOKEN = "${form.menu_selection}"
                             
                             if next_screen_id == UNRESOLVED_TOKEN:
+                                # Fallback to a default screen when the token fails to resolve (RadioButtonsGroup bug)
                                 next_screen_id = "LOAN_CALCULATOR" 
                                 logger.critical("⚠️ WORKAROUND ACTIVATED: Unresolved token detected. Forcing route to LOAN_CALCULATOR.")
 
-
-                            if next_screen_id in ["CREDIT_SCORE", "LOAN_CALCULATOR", "LOAN_TYPES"]:
+                            # Ensure all valid screens are included in the check
+                            valid_screens = ["CREDIT_SCORE", "CREDIT_BANDWIDTH", "LOAN_CALCULATOR", "LOAN_TYPES", "SERVICES"]
+                            
+                            if next_screen_id in valid_screens:
                                 response_obj = {"screen": next_screen_id, "data": {}}
                             else:
                                 response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Chaguo batili."}}
