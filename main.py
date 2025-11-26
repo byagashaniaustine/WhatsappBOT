@@ -242,7 +242,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             try:
                                 # Call the dedicated function from whatsappBOT, passing the entire user_data dict
                                 response_obj = calculate_loan_results(user_data) 
-                                logger.critical("✅ Loan calculation delegated and successful.")
+                                logger.critical(f"{response_obj}✅ Loan calculation delegated and successful.")
                             except ValueError:
                                 # This handles errors like non-numeric input caught by calculate_loan_results
                                 response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
