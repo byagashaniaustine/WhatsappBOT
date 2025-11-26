@@ -3,7 +3,6 @@ from services.meta import send_meta_whatsapp_message, send_manka_menu_template
 import logging
 
 logger = logging.getLogger("whatsapp_app")
-# Set level to DEBUG, but all messages will be critical for output visibility
 logger.setLevel(logging.DEBUG)
 
 
@@ -12,12 +11,13 @@ def calculate_loan(principal: float, duration: int, rate: float):
     Calculate monthly payment, total payment, and total interest.
     Assumes rate is the monthly percentage (e.g., 2.5)
     Uses the standard amortization formula.
+    
+    Raises: ValueError if principal or duration are non-positive.
     """
     
     if duration <= 0 or principal <= 0:
         raise ValueError("Principal and duration must be positive.")
         
-    # Convert monthly percentage rate (e.g., 2.5%) to monthly decimal rate (0.025)
     monthly_rate_decimal = rate / 100.0
     
     if monthly_rate_decimal == 0:
@@ -26,21 +26,60 @@ def calculate_loan(principal: float, duration: int, rate: float):
         n = duration
         i = monthly_rate_decimal
         # Amortization Formula: M = P [ i(1 + i)^n ] / [ (1 + i)^n – 1]
-        numerator = i * (1 + i)**n
         denominator = (1 + i)**n - 1
-        monthly_payment = principal * (numerator / denominator)
+        if denominator == 0:
+             # Handle near zero rate edge case
+             monthly_payment = principal / duration
+        else:
+            numerator = i * (1 + i)**n
+            monthly_payment = principal * (numerator / denominator)
 
     total_payment = monthly_payment * duration
     total_interest = total_payment - principal
     
-    # Return raw numbers for precise use, formatted for display later
+    # Return raw numbers for precise use
     return monthly_payment, total_payment, total_interest
+
+
+def calculate_loan_results(user_data: dict):
+    """
+    Performs the loan calculation based on user input and formats the 
+    response dictionary for the LOAN_RESULT Flow screen.
+    
+    Raises: ValueError or other exceptions on bad input/calculation failure.
+    """
+    
+    # Input field names are 'principal', 'duration', 'rate'
+    principal = float(user_data.get("principal", 0))
+    duration = int(user_data.get("duration", 0))
+    rate = float(user_data.get("rate", 0))
+    
+    logger.critical(f"✅ Executing Loan Calculation: P={principal}, D={duration}, R={rate}")
+
+    # Call the core calculation utility
+    monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
+
+    # Format the results into the required Flow response structure
+    response_screen = {
+        "screen": "LOAN_RESULT", # The screen ID in the Flow JSON to display results
+        "data": {
+            # Format numbers for display in the Flow UI (e.g., 10,000)
+            "principal": f"{principal:,.0f}",  
+            "duration": str(duration),
+            "rate": str(rate),
+            "monthly_payment": f"{monthly_payment:,.0f}",
+            "total_payment": f"{total_payment:,.0f}",
+            "total_interest": f"{total_interest:,.0f}"
+        }
+    }
+    logger.critical(f"➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
+    return response_screen
 
 
 async def whatsapp_menu(data: dict):
     """
-    Unified handler for flow payloads and regular text messages.
-    Expects data = {"From": <phone>, "Body": <decrypted_flow_json_dict OR text>}
+    Handles ONLY regular text messages (non-Flow traffic).
+    Flow payloads are now expected to be handled by the caller (main.py).
     """
     
     from_number = str(data.get("From") or "")
@@ -50,131 +89,31 @@ async def whatsapp_menu(data: dict):
         
     payload = data.get("Body")
 
-    # --- 1. Handle Regular Text Message Fallback ---
+    # --- Handle Regular Text Message Fallback ---
     if isinstance(payload, str):
-        # This is not a flow, it's a regular text message (e.g., a reply to a menu template)
         user_text = payload.strip().upper()
         
-        # Simple text logic (optional, but good for main menu access)
+        # Simple text logic (main menu access)
         if user_text in ["MENU","mambo","hi","hello","anza", "MWANZO"]:
             send_manka_menu_template(to=from_number)
-            # CHANGED: logger.info -> logger.critical
             logger.critical("💬 Regular text: Sending menu template.")
             return JSONResponse({"status": "ok", "message": "Text menu sent"})
 
-        # IMPORTANT: When a flow is active, regular text messages are ignored by Meta's Flow protocol.
-        # This part handles regular messages when no flow is running.
+        # Fallback for unhandled text
         send_meta_whatsapp_message(
             from_number,
             f"Samahani, sikuelewi '{payload}'. Tuma 'menu' kupata orodha ya huduma."
         )
         send_manka_menu_template(to=from_number)
-        # CHANGED: logger.info -> logger.critical
         logger.critical(f"💬 Regular text: Unhandled text '{payload}'. Sending fallback menu.")
         return JSONResponse({"status": "ok", "message": "Text message handled"})
 
-    # --- 2. Handle Decrypted Flow Payload (dict) ---
+    # --- Handle Unexpected Flow Payload (Should not be called with dicts anymore) ---
     if isinstance(payload, dict):
-        try:
-            decrypted_data = payload
-            action = decrypted_data.get("action")
-            current_screen = decrypted_data.get("screen")
-            user_data = decrypted_data.get("data", {})
-            
-            # CHANGED: logger.info -> logger.critical
-            logger.critical(f"📥 Flow Action Received: screen={current_screen}, action={action}")
-
-            # ------------------------------
-            # PING/INIT Handler
-            # ------------------------------
-            if action == "ping" or action == "INIT":
-                # Always route to the starting screen ID defined in your JSON
-                logger.critical("➡️ Routing INIT/PING to MAIN_MENU.")
-                return JSONResponse({"screen": "MAIN_MENU", "data": {}})
-
-            # ------------------------------
-            # MAIN_MENU Submission (Endelea Button Click)
-            # ------------------------------
-            if current_screen == "MAIN_MENU" and action == "data_exchange":
-                # The payload from the flow JSON uses the key "selected_service" directly
-                next_screen_id = user_data.get("selected_service")
-                
-                if next_screen_id in ["CREDIT_SCORE", "CREDIT_BANDWIDTH", "LOAN_CALCULATOR", "LOAN_TYPES", "SERVICES"]:
-                    # CHANGED: logger.info -> logger.critical
-                    logger.critical(f"✅ MAIN_MENU SUCCESS: Routing to dynamic screen: {next_screen_id}")
-                    # Dynamic Routing: Tell Meta to show the screen ID the user selected
-                    return JSONResponse({"screen": next_screen_id, "data": {}})
-                else:
-                    # CHANGED: logger.error -> logger.critical
-                    logger.critical(f"❌ MAIN_MENU ERROR: Invalid selection: {next_screen_id}. Routing back.")
-                    # Routing back to the main menu or an error screen
-                    return JSONResponse({"screen": "MAIN_MENU", "data": {"error_message": "Chaguo batili."}})
-            
-            # ------------------------------
-            # LOAN_CALCULATOR Submission (Kokotoa Malipo Button Click)
-            # ------------------------------
-            if current_screen == "LOAN_CALCULATOR" and action == "data_exchange":
-                try:
-                    # Input field names are 'principal', 'duration', 'rate'
-                    principal = float(user_data.get("principal", 0))
-                    duration = int(user_data.get("duration", 0))
-                    rate = float(user_data.get("rate", 0))
-                    
-                    logger.critical(f"✅ Calculating Loan: P={principal}, D={duration}, R={rate}")
-
-                    monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
-
-                    response_screen = {
-                        "screen": "LOAN_RESULT", # Route to the result screen
-                        "data": {
-                            "principal": f"{principal:,.0f}",  # Format for Tsh display in Flow
-                            "duration": str(duration),
-                            "rate": str(rate),
-                            "monthly_payment": f"{monthly_payment:,.0f}",
-                            "total_payment": f"{total_payment:,.0f}",
-                            "total_interest": f"{total_interest:,.0f}"
-                        }
-                    }
-                    logger.critical(f"➡️ Loan Calculated. Routing to LOAN_RESULT. Monthly Payment: {monthly_payment:,.0f}")
-                    return JSONResponse(response_screen)
-
-                except ValueError:
-                    # Handle non-numeric input error
-                    logger.critical("❌ LOAN_CALCULATOR ERROR: Non-numeric input detected.")
-                    return JSONResponse({
-                        "screen": "LOAN_CALCULATOR", # Stay on calculator screen
-                        "data": {"error_message": "Tafadhali jaza nambari sahihi kwa kiasi, muda na riba."}
-                    })
-                except Exception as e:
-                    # CHANGED: logger.exception -> logger.critical
-                    logger.critical(f"❌ Loan calculation failed: {e}", exc_info=True)
-                    return JSONResponse({
-                        "screen": "ERROR",
-                        "data": {"error_message": "Kikokotoo cha mkopo kilishindikana"}
-                    })
-
-            # ------------------------------
-            # Default/Informational Screen Handling
-            # ------------------------------
-            
-            if action == "complete" or current_screen == "LOAN_RESULT":
-                 logger.critical(f"✅ Flow complete or terminal screen: {current_screen}")
-                 # This action handles flow exit (if defined in your flow JSON) or simply returns the final state.
-                 return JSONResponse({"screen": current_screen, "data": user_data})
-
-
-            # Pass-through / Fallback: If an informational screen is hit, send the user back to the menu.
-            logger.critical(f"⚠️ Unhandled Flow Logic: Action={action} on Screen={current_screen}. Falling back to MAIN_MENU.")
-            return JSONResponse({"screen": "MAIN_MENU", "data": {}})
-            
-        except Exception as e:
-            # CHANGED: logger.exception -> logger.critical
-            logger.critical(f"❌ Unhandled Flow Error processing decrypted data: {e}", exc_info=True)
-            send_meta_whatsapp_message(
-                from_number,
-                "❌ Hitilafu imetokea katika mfumo wa Flow. Tafadhali jaribu tena."
-            )
-            # Return a response that tells the Flow to display an error or exit
-            return JSONResponse({"screen": "ERROR", "data": {"error_message": "Hitilafu isiyotarajiwa."}})
+        logger.critical("⚠️ whatsapp_menu received an unexpected dictionary payload. Ignoring flow data.")
+        send_meta_whatsapp_message(
+            from_number,
+            "Samahani, nimepoteza mawasiliano na mfumo wa huduma. Tafadhali tuma 'menu' kuanza tena."
+        )
 
     return JSONResponse({"status": "ok"})

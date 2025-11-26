@@ -16,7 +16,8 @@ except ImportError:
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
 # --- Import only necessary functions from whatsappBOT ---
-from api.whatsappBOT import whatsapp_menu, calculate_loan_results
+# whatsapp_menu for text messages, calculate_loan_results for Flow calculation
+from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
 
@@ -28,7 +29,7 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
+# --- FLOW SCREEN DEFINITIONS (UPDATED) ---
 FLOW_DEFINITIONS = {
     "LOAN_FLOW_ID_1": { 
         # Screen used for INIT and general routing
@@ -202,7 +203,16 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         if current_screen == "MAIN_MENU":
                             # Route based on service selection
                             next_screen_id = user_data.get("selected_service")
-                            logger.critical(f"User selected service: {next_screen_id}") 
+                            
+                            # 🎯 LOG RAW SELECTION and APPLY WORKAROUND
+                            logger.critical(f"👀 MAIN_MENU Raw Selection: {next_screen_id}") 
+                            UNRESOLVED_TOKEN = "${main_menu_form.menu_selection.id}"
+                            
+                            if next_screen_id == UNRESOLVED_TOKEN:
+                                next_screen_id = "LOAN_CALCULATOR" 
+                                logger.critical("⚠️ WORKAROUND ACTIVATED: Unresolved token detected. Forcing route to LOAN_CALCULATOR.")
+
+
                             if next_screen_id in ["CREDIT_SCORE", "LOAN_CALCULATOR", "LOAN_TYPES"]:
                                 response_obj = {"screen": next_screen_id, "data": {}}
                             else:
@@ -210,15 +220,12 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         
                         elif current_screen == "LOAN_CALCULATOR":
                             # 🎯 DELEGATE CALCULATION ONLY: Call imported function
-                            principal = float(user_data.get("principal", 0))
-                            duration = int(user_data.get("duration", 0))
-                            rate = float(user_data.get("rate", 0))
-                            
                             try:
-                                # Call the dedicated function from whatsappBOT
-                                response_obj = calculate_loan_results(principal, duration, rate)
+                                # Call the dedicated function from whatsappBOT, passing the entire user_data dict
+                                response_obj = calculate_loan_results(user_data) 
                                 logger.critical("✅ Loan calculation delegated and successful.")
                             except ValueError:
+                                # This handles errors like non-numeric input caught by calculate_loan_results
                                 response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
                             except Exception:
                                 response_obj = FLOW_DEFINITIONS["ERROR"]
@@ -231,7 +238,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             # Fallback for unhandled LOAN_FLOW_ID_1 screens
                             response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Kosa: Sehemu ya huduma haikupatikana."}}
                             
-                    # 3. ACCOUNT FLOW ROUTING (ACCOUNT_FLOW_ID_2)
+                    # 3. ACCOUNT FLOW ROUTING (ACCOUNT_FLOW_ID_2) - Unchanged
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
                         if current_screen == "PROFILE_UPDATE":
                             # Route to summary screen using submitted data
@@ -280,6 +287,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             user_text = message.get("text", {}).get("body", "")
             if from_number:
                 logger.critical(f"💬 Message from {from_number}: {user_text}")
+                # Use whatsapp_menu for text
                 background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
         
         # ... (Media handling logic remains the same, omitted for brevity) ...
