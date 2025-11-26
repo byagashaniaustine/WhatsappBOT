@@ -98,16 +98,16 @@ async def whatsapp_menu(data: dict):
             send_manka_menu_template(to=from_number)
             logger.critical("💬 Regular text: Sending menu template.")
             return JSONResponse({"status": "ok", "message": "Text menu sent"})
-
+        else:
         # Fallback for unhandled text
-        send_meta_whatsapp_message(
+         send_meta_whatsapp_message(
             from_number,
             f"Samahani, sikuelewi '{payload}'. Tuma 'menu' kupata orodha ya huduma."
-        )
-        send_manka_menu_template(to=from_number)
-        logger.critical(f"💬 Regular text: Unhandled text '{payload}'. Sending fallback menu.")
-        return JSONResponse({"status": "ok", "message": "Text message handled"})
-
+         )
+         send_manka_menu_template(to=from_number)
+         logger.critical(f"💬 Regular text: Unhandled text '{payload}'. Sending fallback menu.")
+         return JSONResponse({"status": "ok", "message": "Text message handled"})
+ 
     # --- Handle Unexpected Flow Payload (Should not be called with dicts anymore) ---
     if isinstance(payload, dict):
         logger.critical("⚠️ whatsapp_menu received an unexpected dictionary payload. Ignoring flow data.")
