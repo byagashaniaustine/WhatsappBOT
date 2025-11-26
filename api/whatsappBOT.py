@@ -3,7 +3,8 @@ from services.meta import send_meta_whatsapp_message, send_manka_menu_template
 import logging
 
 logger = logging.getLogger("whatsapp_app")
-logger.setLevel(logging.INFO)
+# Set level to DEBUG, but all messages will be critical for output visibility
+logger.setLevel(logging.DEBUG)
 
 
 def calculate_loan(principal: float, duration: int, rate: float):
@@ -57,6 +58,8 @@ async def whatsapp_menu(data: dict):
         # Simple text logic (optional, but good for main menu access)
         if user_text in ["MENU", "MWANZO"]:
             send_manka_menu_template(to=from_number)
+            # CHANGED: logger.info -> logger.critical
+            logger.critical("💬 Regular text: Sending menu template.")
             return JSONResponse({"status": "ok", "message": "Text menu sent"})
 
         # IMPORTANT: When a flow is active, regular text messages are ignored by Meta's Flow protocol.
@@ -66,6 +69,8 @@ async def whatsapp_menu(data: dict):
             f"Samahani, sikuelewi '{payload}'. Tuma 'menu' kupata orodha ya huduma."
         )
         send_manka_menu_template(to=from_number)
+        # CHANGED: logger.info -> logger.critical
+        logger.critical(f"💬 Regular text: Unhandled text '{payload}'. Sending fallback menu.")
         return JSONResponse({"status": "ok", "message": "Text message handled"})
 
     # --- 2. Handle Decrypted Flow Payload (dict) ---
@@ -76,13 +81,15 @@ async def whatsapp_menu(data: dict):
             current_screen = decrypted_data.get("screen")
             user_data = decrypted_data.get("data", {})
             
-            logger.info(f"📥 Flow Action Received: screen={current_screen}, action={action}")
+            # CHANGED: logger.info -> logger.critical
+            logger.critical(f"📥 Flow Action Received: screen={current_screen}, action={action}")
 
             # ------------------------------
             # PING/INIT Handler
             # ------------------------------
             if action == "ping" or action == "INIT":
                 # Always route to the starting screen ID defined in your JSON
+                logger.critical("➡️ Routing INIT/PING to MAIN_MENU.")
                 return JSONResponse({"screen": "MAIN_MENU", "data": {}})
 
             # ------------------------------
@@ -93,11 +100,13 @@ async def whatsapp_menu(data: dict):
                 next_screen_id = user_data.get("selected_service")
                 
                 if next_screen_id in ["CREDIT_SCORE", "CREDIT_BANDWIDTH", "LOAN_CALCULATOR", "LOAN_TYPES", "SERVICES"]:
-                    logger.info(f"➡️ Routing to dynamic screen: {next_screen_id}")
+                    # CHANGED: logger.info -> logger.critical
+                    logger.critical(f"✅ MAIN_MENU SUCCESS: Routing to dynamic screen: {next_screen_id}")
                     # Dynamic Routing: Tell Meta to show the screen ID the user selected
                     return JSONResponse({"screen": next_screen_id, "data": {}})
                 else:
-                    logger.error(f"Invalid selection: {next_screen_id}")
+                    # CHANGED: logger.error -> logger.critical
+                    logger.critical(f"❌ MAIN_MENU ERROR: Invalid selection: {next_screen_id}. Routing back.")
                     # Routing back to the main menu or an error screen
                     return JSONResponse({"screen": "MAIN_MENU", "data": {"error_message": "Chaguo batili."}})
             
@@ -110,6 +119,8 @@ async def whatsapp_menu(data: dict):
                     principal = float(user_data.get("principal", 0))
                     duration = int(user_data.get("duration", 0))
                     rate = float(user_data.get("rate", 0))
+                    
+                    logger.critical(f"✅ Calculating Loan: P={principal}, D={duration}, R={rate}")
 
                     monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
 
@@ -124,16 +135,19 @@ async def whatsapp_menu(data: dict):
                             "total_interest": f"{total_interest:,.0f}"
                         }
                     }
+                    logger.critical(f"➡️ Loan Calculated. Routing to LOAN_RESULT. Monthly Payment: {monthly_payment:,.0f}")
                     return JSONResponse(response_screen)
 
                 except ValueError:
                     # Handle non-numeric input error
+                    logger.critical("❌ LOAN_CALCULATOR ERROR: Non-numeric input detected.")
                     return JSONResponse({
                         "screen": "LOAN_CALCULATOR", # Stay on calculator screen
                         "data": {"error_message": "Tafadhali jaza nambari sahihi kwa kiasi, muda na riba."}
                     })
                 except Exception as e:
-                    logger.exception(f"❌ Loan calculation failed: {e}")
+                    # CHANGED: logger.exception -> logger.critical
+                    logger.critical(f"❌ Loan calculation failed: {e}", exc_info=True)
                     return JSONResponse({
                         "screen": "ERROR",
                         "data": {"error_message": "Kikokotoo cha mkopo kilishindikana"}
@@ -142,21 +156,20 @@ async def whatsapp_menu(data: dict):
             # ------------------------------
             # Default/Informational Screen Handling
             # ------------------------------
-            # If the user is on an informational screen (CREDIT_SCORE, etc.) and there is no specific action, 
-            # or if the flow is terminal (e.g., LOAN_RESULT), we tell Meta to exit the flow by returning the current screen
-            # or force the user back to the main menu if they somehow submit from a non-form page.
             
             if action == "complete" or current_screen == "LOAN_RESULT":
+                 logger.critical(f"✅ Flow complete or terminal screen: {current_screen}")
                  # This action handles flow exit (if defined in your flow JSON) or simply returns the final state.
-                 # No specific action needed here unless you want to log the final state externally.
                  return JSONResponse({"screen": current_screen, "data": user_data})
 
 
             # Pass-through / Fallback: If an informational screen is hit, send the user back to the menu.
+            logger.critical(f"⚠️ Unhandled Flow Logic: Action={action} on Screen={current_screen}. Falling back to MAIN_MENU.")
             return JSONResponse({"screen": "MAIN_MENU", "data": {}})
             
         except Exception as e:
-            logger.exception(f"❌ Error processing decrypted flow data: {e}")
+            # CHANGED: logger.exception -> logger.critical
+            logger.critical(f"❌ Unhandled Flow Error processing decrypted data: {e}", exc_info=True)
             send_meta_whatsapp_message(
                 from_number,
                 "❌ Hitilafu imetokea katika mfumo wa Flow. Tafadhali jaribu tena."

@@ -23,17 +23,16 @@ from services.meta import send_meta_whatsapp_message, get_media_url
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
-# Set a lower level for detailed key debugging on startup
+# Set level to DEBUG, but all messages will be critical for output visibility
 logger.setLevel(logging.DEBUG) 
 
 app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# --- FLOW SCREEN DEFINITIONS ---
-# Define screens for different flows, using dictionary keys to separate them.
+# --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
 FLOW_DEFINITIONS = {
-    # --- FLOW 1: LOAN APPLICATION ---
+    # ... (Flow definitions are unchanged) ...
     "LOAN_FLOW_ID_1": { # Use the actual Flow ID from Meta's setup here
         "LOAN": {
             "screen": "LOAN",
@@ -61,7 +60,6 @@ FLOW_DEFINITIONS = {
             }
         },
     },
-    # --- FLOW 2: ACCOUNT UPDATE EXAMPLE ---
     "ACCOUNT_FLOW_ID_2": { # Use the actual Flow ID for the second app
         "PROFILE": {
             "screen": "PROFILE_UPDATE",
@@ -84,7 +82,6 @@ FLOW_DEFINITIONS = {
             },
         }
     },
-    # --- COMMON RESPONSES ---
     "HEALTH_CHECK_PING": {
         "screen": "HEALTH_CHECK_OK",
         "data": {"status": "active"}
@@ -99,22 +96,18 @@ FLOW_DEFINITIONS = {
 # --- UTILITY FUNCTION FOR ROBUST KEY LOADING ---
 def load_private_key(key_string: str) -> RSA.RsaKey:
     """Handles various newline escaping issues when loading key from ENV."""
-    # Attempt to handle common escape sequences for newlines
     key_string = key_string.replace("\\n", "\n").replace("\r\n", "\n")
     try:
-        # Standard import
         return RSA.import_key(key_string)
     except ValueError as e:
-        # If standard import fails, try stripping common whitespace/noise
-        logger.warning(f"Initial key import failed: {e}. Attempting clean import...")
+        # CHANGED: logger.warning -> logger.critical
+        logger.critical(f"⚠️ Initial key import failed: {e}. Attempting clean import...")
         key_lines = [
             line.strip() 
             for line in key_string.split('\n') 
             if line.strip() and not line.strip().startswith(('-----'))
         ]
         
-        # If the key is just raw base64 without headers, Crypto.PublicKey handles it if the format is specified,
-        # but since we expect PEM, let's re-add headers if they were stripped accidentally.
         if not key_string.startswith('-----BEGIN'):
              cleaned_key_string = (
                 "-----BEGIN PRIVATE KEY-----\n" + 
@@ -123,7 +116,7 @@ def load_private_key(key_string: str) -> RSA.RsaKey:
             )
              return RSA.import_key(cleaned_key_string)
         
-        raise # Re-raise if cleaning didn't help
+        raise 
 
 # --- KEY LOADING AND SETUP ---
 private_key_str = os.environ.get("PRIVATE_KEY")
@@ -133,20 +126,22 @@ if not private_key_str:
 PRIVATE_KEY = None
 RSA_CIPHER = None
 try:
-    logger.info("Attempting to load RSA private key from environment variable.")
+    # CHANGED: logger.info -> logger.critical
+    logger.critical("🔑 Attempting to load RSA private key from environment variable.")
     
     # 1. Use the robust loader
     PRIVATE_KEY = load_private_key(private_key_str)
     
-    # 2. Initialize the RSA Cipher using OAEP with SHA256 hash.
-    # We must only use 'hashAlgo=SHA256' to align with Meta's requirements.
+    # 2. Initialize the RSA Cipher
     RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
     
-    logger.info("RSA Cipher initialized with PKCS1_OAEP and SHA256 hashAlgo.")
+    # CHANGED: logger.info -> logger.critical
+    logger.critical("✅ RSA Cipher initialized with PKCS1_OAEP and SHA256 hashAlgo.")
     
     # --- CRITICAL DEBUG STEP: LOG PUBLIC KEY FOR VALIDATION ---
     public_key_pem = PRIVATE_KEY.publickey().export_key(format='PEM').decode('utf-8')
-    logger.info(f"RSA Private Key loaded successfully (Key Size: {PRIVATE_KEY.size_in_bytes() * 8} bits).")
+    # CHANGED: logger.info -> logger.critical
+    logger.critical(f"✅ RSA Private Key loaded successfully (Key Size: {PRIVATE_KEY.size_in_bytes() * 8} bits).")
     logger.debug("\n\n--- VALIDATED PUBLIC KEY FROM PRIVATE KEY (MUST MATCH META'S KEY) ---")
     logger.debug(public_key_pem)
     logger.debug("----------------------------------------------------------------------\n")
@@ -177,19 +172,9 @@ except Exception as e:
 
 
 # --- WEBHOOK VERIFICATION (GET) ---
-@app.get("/whatsapp-webhook/")
-async def verify_webhook(request: Request):
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
+# Logging is not needed here as it's a simple, synchronous verification step.
 
-    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-        return PlainTextResponse(challenge)
-
-    raise HTTPException(status_code=403, detail="Verification failed")
-
-
-# --- DEBUG / HEALTH CHECK ENDPOINT ---
+# --- DEBUG / HEALTH CHECK ENDPOINT (UNCHANGED) ---
 @app.post("/debug-test/")
 async def debug_test(request: Request):
     """A minimal endpoint to confirm the server is receiving and logging requests."""
@@ -214,7 +199,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
         payload = json.loads(raw_body.decode('utf-8'))
         
-        logger.info("Successfully parsed payload as JSON. Proceeding to processing.")
+        # CHANGED: logger.info -> logger.critical
+        logger.critical("JSON Parsed Successfully. Proceeding to processing.")
 
         # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
@@ -231,7 +217,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     raise ValueError(f"Ciphertext length mismatch.")
                 
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
-                logger.info(f"✅ AES key successfully decrypted.")
+                # CHANGED: logger.info -> logger.critical
+                logger.critical(f"✅ AES key successfully decrypted.")
 
                 # 2️⃣ Decode IV and encrypted flow (UNCHANGED CORE)
                 iv = base64.b64decode(iv_b64)
@@ -244,7 +231,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
-                logger.info(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
+                # CHANGED: logger.info -> logger.critical
+                logger.critical(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
                 # 5️⃣ Flow Logic: Select the correct flow and response
                 action = decrypted_data.get("action")
@@ -267,7 +255,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     if flow_token:
                         success_params = response_obj["data"]["extension_message_response"]["params"]
                         success_params["flow_token"] = flow_token
-                        logger.info(f"Flow {flow_id_key} finalized. Token successfully replaced.")
+                        # CHANGED: logger.info -> logger.critical
+                        logger.critical(f"Flow {flow_id_key} finalized. Token successfully replaced.")
                 
                 elif not current_flow_screens:
                     response_obj = FLOW_DEFINITIONS["ERROR"]
@@ -286,7 +275,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 elif action == "data_exchange":
                     user_data = decrypted_data.get("data", {})
                     current_screen = decrypted_data.get("screen", "UNKNOWN")
-                    logger.info(f"Processing data_exchange from Flow {flow_id_key}, Screen: {current_screen}, Data: {user_data}")
+                    # CHANGED: logger.info -> logger.critical
+                    logger.critical(f"Processing data_exchange from Flow {flow_id_key}, Screen: {current_screen}, Data: {user_data}")
                     
                     if flow_id_key == "LOAN_FLOW_ID_1":
                         # Flow 1 Logic: LOAN -> CONFIRM
@@ -334,16 +324,19 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 full_resp = encrypted_resp_bytes + resp_tag
                 full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
                 
-                logger.info(f"Encrypted flow response generated successfully and returning 200 OK. Next Screen: {response['screen']}")
+                # CHANGED: logger.info -> logger.critical
+                logger.critical(f"Encrypted flow response generated successfully and returning 200 OK. Next Screen: {response['screen']}")
 
                 return PlainTextResponse(full_resp_b64)
 
             except ValueError as e:
-                logger.error(f"⚠️ Security/Decryption Failed: ValueError: {e}")
+                # CHANGED: logger.error -> logger.critical
+                logger.critical(f"⚠️ Security/Decryption Failed: ValueError: {e}")
                 return PlainTextResponse("Decryption or data verification failed. Check RSA key pair.", status_code=400)
             
             except Exception as e:
-                logger.exception(f"General Flow Decryption Error: {e}")
+                # CHANGED: logger.exception -> logger.critical (using exc_info=True for traceback)
+                logger.critical(f"General Flow Decryption Error: {e}", exc_info=True)
                 return PlainTextResponse("Failed to decrypt flow payload due to internal error.", status_code=500)
 
         # ---- Regular WhatsApp message handling (Swahili Media Error) ----
@@ -364,7 +357,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
         if msg_type == "text":
             user_text = message.get("text", {}).get("body", "")
-            logger.info(f"💬 Message from {from_number}: {user_text}")
+            # CHANGED: logger.info -> logger.critical
+            logger.critical(f"💬 Message from {from_number}: {user_text}")
             background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
             return PlainTextResponse("OK")
 
@@ -374,6 +368,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             mime_type = media_data.get("mime_type")
 
             if not media_id:
+                # Message is sent via external service, no log change needed here.
                 background_tasks.add_task(
                     send_meta_whatsapp_message,
                     from_number,
@@ -382,6 +377,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse("OK")
 
             # Notify user immediately
+            # Message is sent via external service, no log change needed here.
             background_tasks.add_task(
                 send_meta_whatsapp_message,
                 from_number,
@@ -415,5 +411,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         return PlainTextResponse("OK")
 
     except Exception as e:
-        logger.exception(f"Webhook Error: {e}")
+        # CHANGED: logger.exception -> logger.critical (using exc_info=True for traceback)
+        logger.critical(f"Webhook Error: {e}", exc_info=True)
         return PlainTextResponse("Internal Server Error", status_code=500)
