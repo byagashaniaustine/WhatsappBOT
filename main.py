@@ -151,7 +151,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
                 # 🔥 CRITICAL FIX: Ensure minimal and compliant PING response for health check
                 if action == "ping":
-                    response_obj = {"screen": "MAIN_MENU", "data": {}}
+                    response_obj = {"screen": "MAIN_MENU", "data": {"active"}}
                     logger.critical("✅ [PING] Responded with explicit MAIN_MENU payload for health check.")
                 
                 elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
