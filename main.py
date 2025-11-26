@@ -19,7 +19,7 @@ except ImportError:
 # whatsapp_menu for text messages, calculate_loan_results for Flow calculation
 from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
 from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message, get_media_url
+from services.meta import send_meta_whatsapp_message, get_media_url # Ensure get_media_url is imported
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
@@ -29,7 +29,7 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# --- FLOW SCREEN DEFINITIONS (UPDATED) ---
+# --- FLOW SCREEN DEFINITIONS (UNCHANGED from last successful flow update) ---
 FLOW_DEFINITIONS = {
     "LOAN_FLOW_ID_1": { 
         # Screen used for INIT and general routing
@@ -44,7 +44,7 @@ FLOW_DEFINITIONS = {
         # Placeholder screens for other menu options (if needed)
         "CREDIT_SCORE": {"screen": "CREDIT_SCORE", "data": {}},
         "LOAN_TYPES": {"screen": "LOAN_TYPES", "data": {}},
-        "SERVICES": {"screen": "SERVICES", "data": {}}, # Added SERVICES
+        "SERVICES": {"screen": "SERVICES", "data": {}}, 
         
         # --- NEW AFFORDABILITY SCREENS ---
         "AFFORDABILITY_CHECK": {"screen": "AFFORDABILITY_WELCOME", "data": {}},
@@ -130,7 +130,7 @@ async def debug_test(request: Request):
 
 
 # ----------------------------------------------------------------------
-## 🚀 WEBHOOK HANDLER (POST) - All Flow Routing is done here
+## 🚀 WEBHOOK HANDLER (POST) - All Flow Routing and Message Handling
 # ----------------------------------------------------------------------
 @app.post("/whatsapp-webhook/")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
@@ -141,7 +141,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         payload = json.loads(raw_body.decode('utf-8'))
         logger.critical("JSON Parsed Successfully.")
 
-        # ---- Encrypted Flow Payload Handling ----
+        # ---- Encrypted Flow Payload Handling (UNCHANGED) ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
@@ -150,11 +150,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
         if is_flow_payload:
             try:
-                # 1️⃣ Decrypt AES key with RSA
+                # Flow Decryption and Routing Logic (omitted for brevity, assume unchanged)
+                
+                # ... [1️⃣ Decrypt AES key with RSA, 2️⃣ Decrypt AES-GCM payload] ...
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
-                
-                # 2️⃣ Decrypt AES-GCM payload
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
                 ciphertext = encrypted_flow_bytes[:-16]
@@ -165,7 +165,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
                 logger.critical(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
-                # --- START FLOW ROUTING LOGIC (IN MAIN.PY) ---
+                # --- START FLOW ROUTING LOGIC (UNCHANGED) ---
                 action = decrypted_data.get("action")
                 flow_token = decrypted_data.get("flow_token")
                 user_data = decrypted_data.get("data", {})
@@ -210,7 +210,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         next_screen_key = user_data.get("next_screen")
                         if next_screen_key and next_screen_key in FLOW_DEFINITIONS[flow_id_key]:
                             # This handles the navigation from AFFORDABILITY_WELCOME to DOCUMENT_REQUEST
-                            # and any future back-to-menu buttons (if re-added).
                             response_obj = {"screen": next_screen_key, "data": {}}
                             logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
                         
@@ -249,10 +248,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                 response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
                             except Exception:
                                 response_obj = FLOW_DEFINITIONS["ERROR"]
-
-                        # No explicit data_exchange handler needed for LOAN_RESULT or DOCUMENT_REQUEST as they are terminal/completion screens
-                        # unless they explicitly had a button to navigate back/forward (which we removed).
-                        # The general `next_screen` logic above covers the AFFORDABILITY_WELCOME button.
                         
                         else:
                             # Fallback for unhandled LOAN_FLOW_ID_1 screens
@@ -299,20 +294,61 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
+        contacts = value.get("contacts", [])
         
-        # Only regular text messages are delegated to whatsapp_menu
-        if messages and messages[0].get("type") == "text":
+        if messages:
             message = messages[0]
             from_number = message.get("from")
-            user_text = message.get("text", {}).get("body", "")
-            if from_number:
-                logger.critical(f"💬 Message from {from_number}: {user_text}")
-                # Use whatsapp_menu for text
-                background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
-        
-        # ... (Media handling logic remains the same, omitted for brevity) ...
-        # ... (Fallback logic remains the same, omitted for brevity) ...
-
+            message_type = message.get("type")
+            
+            # Extract user name if available (useful for logging/storage)
+            user_name = next((contact.get("profile", {}).get("name") for contact in contacts if contact.get("wa_id") == from_number), from_number)
+            
+            if message_type == "text":
+                user_text = message.get("text", {}).get("body", "")
+                if from_number:
+                    logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
+                    # Use whatsapp_menu for text
+                    background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
+            
+            # --- START MEDIA MESSAGE HANDLING ---
+            elif message_type in ["image", "document"]:
+                media_data = message.get(message_type, {})
+                media_id = media_data.get("id")
+                mime_type = media_data.get("mime_type")
+                
+                if media_id and mime_type and from_number:
+                    logger.critical(f"🖼️ Media Message received from {from_number} ({user_name}). Type: {message_type}, MIME: {mime_type}, ID: {media_id}")
+                    
+                    try:
+                        # 1. Get the direct download URL from Meta
+                        media_url = get_media_url(media_id)
+                        
+                        # 2. Delegate the file processing (download, analyze, store) to the background
+                        # We use "AFFORDABILITY_CHECK" as the flow_type context for file processing
+                        background_tasks.add_task(
+                            process_file_upload, 
+                            user_id=from_number, 
+                            user_name=user_name, 
+                            user_phone=from_number, 
+                            flow_type="AFFORDABILITY_CHECK", 
+                            media_url=media_url, 
+                            mime_type=mime_type
+                        )
+                        
+                    except RuntimeError as e:
+                        # Handle failure in getting media URL
+                        logger.error(f"Failed to get media URL for {media_id}: {e}")
+                        send_meta_whatsapp_message(from_number, "❌ Samahani, tulipata hitilafu kupata kiungo cha faili lako kutoka WhatsApp. Tafadhali jaribu tena.")
+                        
+                else:
+                    logger.warning(f"Media message lacked required ID/MIME from {from_number}")
+                    send_meta_whatsapp_message(from_number, "❌ Samahani, upakiaji wa faili haukukamilika. Tafadhali hakikisha umetuma picha (JPG/PNG/WEBP) au PDF.")
+            # --- END MEDIA MESSAGE HANDLING ---
+            
+            else:
+                logger.info(f"Received unhandled message type: {message_type} from {from_number}")
+                
         return PlainTextResponse("OK")
 
     except Exception as e:
