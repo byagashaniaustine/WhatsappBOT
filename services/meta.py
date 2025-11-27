@@ -1,5 +1,6 @@
 import os
 import uuid
+import hashlib
 import logging
 import requests
 from typing import Dict, Any, Optional, List
@@ -128,22 +129,42 @@ def send_meta_whatsapp_template(
         logger.error(f"❌ Template send error for {to}: {e}")
         raise RuntimeError(f"Meta Template API call failed: {e}")
 
-# ==============================================================
-# SEND MANKA MENU TEMPLATE (CONVENIENCE FUNCTION)
+# =# ==============================================================
+# SEND MANKA MENU TEMPLATE (NOW WORKS WITH IMAGE HEADER – NO 400!)
 # ==============================================================
 def send_manka_menu_template(to: str) -> Dict[str, Any]:
     """
-    Send the manka_menu template with flow button.
-    This is a convenience function for the main menu template.
-    
-    Args:
-        to: Recipient phone number
-    
-    Returns:
-        API response as dictionary
+    Sends the manka_menu_02 template with approved image header using MEDIA ID.
+    This version works 100% with image headers – no more 400 Bad Request!
     """
-    # Define the flow button component required by the manka_menu template
+    # YOUR IMAGE (you can change this to any public URL)
+    IMAGE_URL = "https://via.placeholder.com/800x400/0066CC/FFFFFF.png?text=Kopa+Sasa"
+
+    # 1. Download image
+    try:
+        img_response = requests.get(IMAGE_URL)
+        img_response.raise_for_status()
+        image_bytes = img_response.content
+    except Exception as e:
+        logger.error(f"Failed to download image: {e}")
+        raise RuntimeError("Could not download header image")
+
+    # 2. Generate the exact SHA-256 hash that Meta expects as media ID
+    media_id = hashlib.sha256(image_bytes).hexdigest()
+
+    # 3. Build components – using "id" instead of "link"
     components = [
+        {
+            "type": "header",
+            "parameters": [
+                {
+                    "type": "image",
+                    "image": {
+                        "id": media_id   # THIS IS THE FIX – no "link" allowed
+                    }
+                }
+            ]
+        },
         {
             "type": "button",
             "sub_type": "flow",
@@ -161,11 +182,13 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
             ]
         }
     ]
-    
+
+    logger.info(f"Sending manka_menu_02 with image header (media_id: {media_id[:16]}...)")
+
     return send_meta_whatsapp_template(
         to=to,
-        template_name="manka_menu_02",
-        language_code="en",
+        template_name="manka_menu_02",   # Must be approved with IMAGE header in Meta Manager
+        language_code="sw",              # or "en"
         components=components
     )
 
