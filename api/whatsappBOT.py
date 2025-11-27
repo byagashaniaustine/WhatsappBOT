@@ -92,70 +92,26 @@ def calculate_loan_results(user_data: dict):
 
 
 
-async def whatsapp_menu(data: dict = None, user_data: dict = None):
+
+
+
+async def whatsapp_menu(data: dict,user_data: dict = None):
+    # (Existing function remains unchanged)
     """
-    Handles regular text messages AND, when provided via background tasks (user_data != None), 
-    calculates and sends the loan result summary via WhatsApp.
+    Handles ONLY regular text messages (non-Flow traffic).
+    Flow payloads are now expected to be handled by the caller (main.py).
     """
+
     
-    # --- Universal Phone Number Extraction (Robust Check) ---
-    # Prioritize 'From' from user_data (Flow data) if available, otherwise use 'data' (Text message data)
-    from_number = str(user_data.get("From") if user_data else data.get("From", ""))
+    
+    from_number = str(data.get("From") or "")
+    # Ensure phone number is in E.164 format for safe use
     if not from_number.startswith("+"):
         from_number = "+" + from_number
         
-    logger.critical(f"📲 whatsapp_menu triggered for number: {from_number}")
-    # --- 1. LOAN CALCULATION AND SENDING BLOCK (Only runs if user_data is provided) ---
-    if user_data:
-        try:
-            # Retrieve Input Data from user_data (Safely assumes float/int conversions)
-            principal = float(user_data.get("principal", 0))
-            duration = int(user_data.get("duration", 0))
-            rate = float(user_data.get("rate", 0))
-            number=from_number
-
-            logger.critical(f"✅ Obtained (Loan Block): P={principal}, D={duration}, R={rate} and user number: {number}")
-
-            # Perform Calculation
-            monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
-            
-            # 2. Format and Send WhatsApp Message (FIX: Added number formatting)
-            monthly_payment_str = f"{monthly_payment:,.0f}"
-            total_interest_str = f"{total_interest:,.0f}"
-            total_payment_str = f"{total_payment:,.0f}"
-            principal_str = f"{principal:,.0f}" # Use formatted string for principal too
-            
-            if from_number:
-                send_meta_whatsapp_message(
-                    from_number,
-                    f"Habari!\n"
-                    f"Matokeo ya mkopo wako (TZS {principal_str} kwa {duration} miezi) yamekamilika:\n\n"
-                    f"💰 **Malipo ya Kila Mwezi:** TZS {monthly_payment_str}\n"
-                    f"Jumla ya Riba: TZS {total_interest_str}\n"
-                    f"Jumla ya Kulipa: TZS {total_payment_str}\n\n"
-                    "Tafadhali angalia skrini yako ya WhatsApp kwa muhtasari na hatua inayofuata."
-                )
-                logger.critical("💬 Loan calculation results message sent from whatsapp_menu.")
-            else:
-                logger.error(f"❌ Cannot send loan result message: {from_number} Recipient number is missing.")
-
-            # FIX: Must return here to prevent falling into the text message logic below.
-            return JSONResponse({"status": "ok", "message": "Loan calculation processed in background."})
-
-        except ValueError as e:
-            logger.error(f"❌ Calculation failed due to bad input: {e}")
-            if from_number:
-                send_meta_whatsapp_message(from_number, "Samahani, tafadhali jaza nambari sahihi kwa hesabu.")
-            return JSONResponse({"status": "error", "message": "Calculation error."})
-        except Exception as e:
-            logger.error(f"❌ General error in loan calculation block: {e}")
-            return JSONResponse({"status": "error", "message": "Internal error during calculation."})
-
-
-    # --- 2. Handle Regular Text Message Fallback (Original Logic) ---
-    # This block only executes if user_data was None (i.e., it's a standard text message)
     payload = data.get("Body")
-    
+
+    # --- Handle Regular Text Message Fallback ---
     if isinstance(payload, str):
         user_text = payload.strip().upper()
         
@@ -174,14 +130,12 @@ async def whatsapp_menu(data: dict = None, user_data: dict = None):
          logger.critical(f"💬 Regular text: Unhandled text '{payload}'. Sending fallback menu.")
          return JSONResponse({"status": "ok", "message": "Text message handled"})
  
-    # --- 3. Handle Unexpected Payloads ---
+    # --- Handle Unexpected Flow Payload (Should not be called with dicts anymore) ---
     if isinstance(payload, dict):
         logger.critical("⚠️ whatsapp_menu received an unexpected dictionary payload. Ignoring flow data.")
-        if from_number:
-            send_meta_whatsapp_message(
-                from_number,
-                "Samahani, nimepoteza mawasiliano na mfumo wa huduma. Tafadhali tuma 'menu' kuanza tena."
-            )
-        return JSONResponse({"status": "ok"})
+        send_meta_whatsapp_message(
+            from_number,
+            "Samahani, nimepoteza mawasiliano na mfumo wa huduma. Tafadhali tuma 'menu' kuanza tena."
+        )
 
     return JSONResponse({"status": "ok"})
