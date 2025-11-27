@@ -92,7 +92,7 @@ def calculate_loan_results(user_data: dict):
 
 
 
-async def whatsapp_menu(data: dict, user_data: dict = None):
+async def whatsapp_menu(data: dict = None, user_data: dict = None):
     """
     Handles regular text messages AND, when provided via background tasks (user_data != None), 
     calculates and sends the loan result summary via WhatsApp.
