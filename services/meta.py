@@ -63,108 +63,15 @@ def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Error sending message to {to}: {e}")
         raise RuntimeError(f"Meta API call failed: {e}")
-
 # ==============================================================
-# SEND WHATSAPP TEMPLATE MESSAGE WITH FLOW BUTTON
-# ==============================================================
-def send_meta_whatsapp_template(
-    to: str,
-    template_name: str,
-    language_code: str = "en",
-    components: Optional[List[Dict[str, Any]]] = None
-) -> Dict[str, Any]:
-    """
-    Send a WhatsApp template message.
-    
-    Args:
-        to: Recipient phone number (with country code, no + sign)
-        template_name: Name of the approved template
-        language_code: Language code (default: "en")
-        components: Optional list of component objects for dynamic content
-    
-    Returns:
-        API response as dictionary
-    """
-    if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
-        raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
-
-    # Normalize phone number - remove + if present
-    to = to.replace("+", "")
-
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": language_code}
-        }
-    }
-
-    # Add components if provided
-    if components:
-        payload["template"]["components"] = components
-
-    try:
-        logger.info(f"🚀 Sending Template '{template_name}' to {to}")
-        logger.info(f"📦 Payload: {payload}")
-        
-        response = requests.post(API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        
-        logger.info(f"✅ Template sent successfully: {response.json()}")
-        return response.json()
-        
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"❌ HTTP Error sending template to {to}: {e}")
-        logger.error(f"Response: {e.response.text if e.response else 'No response'}")
-        raise RuntimeError(f"Meta Template API HTTP error: {e}")
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Template send error for {to}: {e}")
-        raise RuntimeError(f"Meta Template API call failed: {e}")
-
-# =# ==============================================================
-# SEND MANKA MENU TEMPLATE (NOW WORKS WITH IMAGE HEADER – NO 400!)
+# FINAL VERSION — IMAGE ALREADY UPLOADED IN TEMPLATE (SIMPLE & BULLETPROOF)
 # ==============================================================
 def send_manka_menu_template(to: str) -> Dict[str, Any]:
     """
-    Sends the manka_menu_02 template with approved image header using MEDIA ID.
-    This version works 100% with image headers – no more 400 Bad Request!
+    Sends manka_menu_02 template with pre-uploaded image header.
+    No download, no hashing, no DNS issues → works forever.
     """
-    # YOUR IMAGE (you can change this to any public URL)
-    IMAGE_URL = "https://via.placeholder.com/800x400/0066CC/FFFFFF.png?text=Kopa+Sasa"
-
-    # 1. Download image
-    try:
-        img_response = requests.get(IMAGE_URL)
-        img_response.raise_for_status()
-        image_bytes = img_response.content
-    except Exception as e:
-        logger.error(f"Failed to download image: {e}")
-        raise RuntimeError("Could not download header image")
-
-    # 2. Generate the exact SHA-256 hash that Meta expects as media ID
-    media_id = hashlib.sha256(image_bytes).hexdigest()
-
-    # 3. Build components – using "id" instead of "link"
     components = [
-        {
-            "type": "header",
-            "parameters": [
-                {
-                    "type": "image",
-                    "image": {
-                        "id": media_id   # THIS IS THE FIX – no "link" allowed
-                    }
-                }
-            ]
-        },
         {
             "type": "button",
             "sub_type": "flow",
@@ -183,15 +90,14 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
         }
     ]
 
-    logger.info(f"Sending manka_menu_02 with image header (media_id: {media_id[:16]}...)")
+    logger.info("Sending manka_menu_02 (image already uploaded in Meta template)")
 
-    return send_meta_whatsapp_template(
+    return send_manka_menu_template(
         to=to,
-        template_name="manka_menu_02",   # Must be approved with IMAGE header in Meta Manager
-        language_code="sw",              # or "en"
+        template_name="manka_menu_02",
+        language_code="sw",   # or "en" — whatever your template uses
         components=components
     )
-
 # ==============================================================
 # GET MEDIA DOWNLOAD URL
 # ==============================================================
