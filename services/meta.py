@@ -1,6 +1,5 @@
 import os
 import uuid
-import hashlib
 import logging
 import requests
 from typing import Dict, Any, Optional, List
@@ -128,14 +127,22 @@ def send_meta_whatsapp_template(
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Template send error for {to}: {e}")
         raise RuntimeError(f"Meta Template API call failed: {e}")
+
 # ==============================================================
-# FINAL VERSION — IMAGE UPLOADED IN META → SIMPLE & PERFECT
+# SEND MANKA MENU TEMPLATE (CONVENIENCE FUNCTION)
 # ==============================================================
 def send_manka_menu_template(to: str) -> Dict[str, Any]:
     """
-    Sends the main menu template with your pre-uploaded image header.
-    Works instantly. No download. No errors.
+    Send the manka_menu template with flow button.
+    This is a convenience function for the main menu template.
+    
+    Args:
+        to: Recipient phone number
+    
+    Returns:
+        API response as dictionary
     """
+    # Define the flow button component required by the manka_menu template
     components = [
         {
             "type": "button",
@@ -154,15 +161,14 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
             ]
         }
     ]
-
-    logger.info("Sending manka_menu_02 with pre-uploaded image header")
-
+    
     return send_meta_whatsapp_template(
         to=to,
-        template_name="manka_menu_02",   # ← THIS IS YOUR TEMPLATE NAME
-        language_code="en",              # ← change to "en" if your template uses English
+        template_name="manka_menu_02",
+        language_code="en",
         components=components
     )
+
 # ==============================================================
 # GET MEDIA DOWNLOAD URL
 # ==============================================================
