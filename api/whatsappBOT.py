@@ -92,6 +92,7 @@ def calculate_loan_results(user_data: dict):
                                f"Jumla ya riba: TZS {total_interest:,.0f}\n"
                                f"Jumla ya kulipa: TZS {total_payment:,.0f}  \n"
                                "Asante kwa kutumia huduma zetu!   ")
+    logger.critical("💬 Loan calculation results message sent via WhatsApp.")
     return response_screen
 
 
