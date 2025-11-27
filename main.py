@@ -216,7 +216,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                 try:
                                     # Call the dedicated function, which returns the LOAN_RESULT payload
                                     response_obj = calculate_loan_results(user_data)
-                                    background_tasks.add_task(whatsapp_menu, user_data, user_data)  # Call whatsapp_menu to send the WhatsApp message
+                                    background_tasks.add_task(whatsapp_menu, user_data)  # Call whatsapp_menu to send the WhatsApp message
                                     logger.critical(f"{response_obj}✅ Loan calculation delegated and successful.")
                                     # --- START MODIFIED LOGGING HERE ---
                                     if response_obj and response_obj.get("data"):
