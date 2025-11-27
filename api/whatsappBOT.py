@@ -61,7 +61,7 @@ def calculate_loan_results(user_data: dict):
     if not from_number.startswith("+"):
         from_number = "+" + from_number
     
-    logger.critical(f"✅ Executing Loan Calculation: P={principal}, D={duration}, R={rate}")
+    logger.critical(f"✅ Executing Loan Calculation: P={principal}, D={duration}, R={rate} user: {from_number}")
 
     # 2. Perform Calculation
     try:
