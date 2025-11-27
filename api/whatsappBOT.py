@@ -40,42 +40,6 @@ def calculate_loan(principal: float, duration: int, rate: float):
     # Return raw numbers for precise use
     return monthly_payment, total_payment, total_interest
 
-# --- NEW HELPER FUNCTION FOR WHATSAPP MESSAGING ---
-def send_loan_calculation_whatsapp(from_number: str, principal: float, duration: int, rate: float, monthly_payment: float, total_payment: float):
-    """
-    Formats the final loan calculation results professionally in Swahili
-    and sends them to the user via WhatsApp.
-    """
-    try:
-        # Format numbers for professional display (with commas and no decimals)
-        p_formatted = f"{principal:,.0f}"
-        mp_formatted = f"{monthly_payment:,.0f}"
-        tp_formatted = f"{total_payment:,.0f}"
-        rate_formatted = f"{rate}" # Keep rate as provided
-        
-        # --- Professional Swahili Message Structure ---
-        whatsapp_message = (
-            "Habari!\n"
-            "Tumekamilisha kuhesabu malipo ya mkopo wako. Kulingana na maelezo uliyotoa:\n\n"
-            f"Kiasi cha Mkopo (Principal): **TZS {p_formatted}**\n"
-            f"Muda wa Kurejesha: **{duration} miezi**\n"
-            f"Riba kwa Mwezi: **{rate_formatted}%**\n\n"
-            
-            "Malipo yako ya kila mwezi yatakuwa:\n"
-            "💰 **TZS "
-            f"{mp_formatted}"
-            "**\n\n"
-            
-            f"Jumla ya kiasi utakachorejesha (Total Repayment): TZS {tp_formatted}.\n\n"
-            "Tafadhali jibu 'NDIYO' ili kuendelea na mchakato wa maombi ya mkopo, au 'MENU' kurudi kwenye huduma zetu. Asante kwa kutumia huduma ya Manka."
-        )
-
-        send_meta_whatsapp_message(from_number, whatsapp_message)
-        logger.critical(f"✅ WhatsApp Message Sent: Loan results for P={p_formatted} sent to {from_number}")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to send loan result WhatsApp message: {e}")
-
 # --- MODIFIED CORE HANDLER ---
 def calculate_loan_results(user_data: dict):
     """
@@ -105,7 +69,7 @@ def calculate_loan_results(user_data: dict):
         return {"screen": "MAIN_MENU", "data": {"error": "Invalid input"}}
 
     # 3. Send WhatsApp Message (Immediate Action)
-    send_loan_calculation_whatsapp(from_number, principal, duration, rate, monthly_payment, total_payment)
+    
 
     # 4. Format and Return Flow Response (To display LOAN_RESULT screen)
     response_screen = {
@@ -123,6 +87,11 @@ def calculate_loan_results(user_data: dict):
     }
     
     logger.critical(f"Flow routing answer: {response_screen} ➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
+    send_meta_whatsapp_message(from_number,
+                               f"Matokeo ya mkopo wako ni:\nKiasi cha kurudisha kila mwezi: TZS {monthly_payment:,.0f}\n"
+                               f"Jumla ya riba: TZS {total_interest:,.0f}\n"
+                               f"Jumla ya kulipa: TZS {total_payment:,.0f}  \n"
+                               "Asante kwa kutumia huduma zetu!   ")
     return response_screen
 
 
