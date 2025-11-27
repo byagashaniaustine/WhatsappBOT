@@ -2,7 +2,7 @@ import os
 import json
 import base64
 import logging
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from starlette.responses import JSONResponse 
 
@@ -13,7 +13,6 @@ try:
     from Crypto.Cipher import PKCS1_OAEP, AES
     from Crypto.Util.Padding import unpad
 except ImportError:
-    # In a real environment, this import error check should be handled gracefully
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
 # --- Import necessary functions ---
@@ -29,7 +28,7 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
+# --- FLOW SCREEN DEFINITIONS ---
 FLOW_DEFINITIONS = {
     "LOAN_FLOW_ID_1": { 
         "MAIN_MENU": {"screen": "MAIN_MENU", "data": {}},
@@ -72,7 +71,6 @@ FLOW_DEFINITIONS = {
     "HEALTH_CHECK_PING": {"screen": "HEALTH_CHECK_OK", "data": {"status": "active"}},
     "ERROR": {"screen": "ERROR", "data": {"error_message": "An unknown action occurred."}}
 }
-# ---------------------------------------------------
 
 # --- UTILITY FUNCTIONS ---
 
@@ -91,26 +89,23 @@ def load_private_key(key_string: str) -> RSA.RsaKey:
         
         raise 
 
-def get_sender_waid(payload: dict) -> str:
-    """
-    Safely extracts the sender's WhatsApp ID (WAID) from the raw webhook payload.
-    This is essential for both Flow and regular message replies.
-    """
+def get_sender_phone_number(payload: dict) -> str:
+    """Safely extracts the sender's E.164 phone number from the raw webhook payload."""
     try:
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         
-        # Look for the number in the 'messages' array (used for all traffic, including Flows)
+        # Look for the number in the 'messages' array (used for all traffic)
         messages = value.get("messages", [])
-        if messages:
-            return messages[0].get("from", "")
+        if messages and messages[0].get("from"):
+            return messages[0].get("from")
     except Exception:
-        logger.warning("Failed to extract sender WAID from the raw payload structure.")
+        logger.warning("Failed to extract sender phone number from the raw payload structure.")
         return ""
     return ""
 
-# --- KEY LOADING AND SETUP (UNCHANGED) ---
+# --- KEY LOADING AND SETUP ---
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
     raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
@@ -128,7 +123,7 @@ except Exception as e:
     raise
 
 
-# --- DEBUG / HEALTH CHECK ENDPOINT (UNCHANGED) ---
+# --- DEBUG / HEALTH CHECK ENDPOINT ---
 @app.post("/debug-test/")
 async def debug_test(request: Request):
     logger.critical(f"✅ [DEBUG] Successfully hit the /debug-test/ endpoint from {request.client.host if request.client else 'Unknown Host'}")
@@ -150,13 +145,13 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         payload = json.loads(raw_body.decode('utf-8'))
         logger.critical("JSON Parsed Successfully.")
 
-        # --- STEP 1: Extract Sender Phone Number from Raw Payload (Crucial Fix) ---
-        from_number = get_sender_waid(payload)
+        # --- STEP 1: Extract Sender Phone Number from Raw Payload ---
+        from_number = get_sender_phone_number(payload)
         if from_number:
-            logger.critical(f"✅ Extracted Sender WAID: {from_number}")
+            logger.critical(f"✅ Extracted Sender Phone Number: {from_number}")
         else:
-            logger.critical("❌ Could not find Sender WAID in raw payload.")
-        # -------------------------------------------------------------------------
+            logger.critical("❌ Could not find Sender Phone Number in raw payload.")
+        # -------------------------------------------------------------
 
         # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
@@ -188,14 +183,20 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 flow_id_key = user_data.get("flow_id", "LOAN_FLOW_ID_1") 
                 current_flow_screens = FLOW_DEFINITIONS.get(flow_id_key)
                 response_obj = None
-
-                # --- STEP 2: Inject 'From' number into user_data ---
+                
+                # --- STEP 2: Handle 'From' injection/recovery ---
+                # A. Inject from_number found in raw payload for calculation/messaging
                 if from_number:
                     user_data["From"] = from_number 
+                
+                # B. Use 'client_phone' fallback if 'From' is still missing (for data_exchange)
+                elif "From" not in user_data:
+                    from_number = user_data.get("client_phone")
+                    if from_number:
+                        user_data["From"] = from_number
+                        logger.critical(f"📞 Recovered phone number {from_number} from Flow data (client_phone).")
                 # -------------------------------------------------
 
-                # ... (Ping, Success/Final, and INIT actions remain unchanged) ...
-                
                 if action == "ping":
                     response_obj = FLOW_DEFINITIONS["HEALTH_CHECK_PING"]
                     logger.critical("✅ [PING] Responded with original HEALTH_CHECK_PING definition.")
@@ -208,12 +209,18 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         logger.critical(f"Flow {flow_id_key} finalized.")
 
                 elif action == "INIT":
+                    # --- FIX: Inject phone number into INIT data ---
                     if flow_id_key == "LOAN_FLOW_ID_1":
                         response_obj = {"screen": "MAIN_MENU", "data": {}}
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
                         response_obj = current_flow_screens["PROFILE"]
                     else:
                         response_obj = FLOW_DEFINITIONS["ERROR"]
+                        
+                    # Inject the extracted phone number into the Flow data to be returned later
+                    if from_number and response_obj and response_obj.get("data") is not None:
+                        response_obj["data"]["client_phone"] = from_number 
+                        logger.critical(f"📞 Injected phone number {from_number} into Flow INIT data.")
                 
                 elif action == "data_exchange":
                     
@@ -225,7 +232,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         
                         next_screen_key = user_data.get("next_screen")
                         
-                        # --- START REFACTORED NEXT_SCREEN/CALCULATOR LOGIC ---
                         if next_screen_key and next_screen_key in FLOW_DEFINITIONS[flow_id_key]:
                             
                             # A. Handle LOAN_CALCULATOR -> LOAN_RESULT transition
@@ -239,7 +245,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     if response_obj and response_obj.get("data") and from_number:
                                         data = response_obj["data"]
                                         
-                                        # Use the already formatted strings from the calculation result
                                         principal_str = data.get('principal', 'N/A')
                                         duration_str = data.get('duration', 'N/A')
                                         mp_str = data.get('monthly_payment', 'N/A')
@@ -269,10 +274,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             else:
                                 response_obj = {"screen": next_screen_key, "data": {}}
                                 logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
-                        # --- END REFACTORED NEXT_SCREEN/CALCULATOR LOGIC ---
                         
-                        
-                        # ... (rest of MAIN_MENU routing remains) ...
                         
                         elif current_screen == "MAIN_MENU":
                             next_screen_id = user_data.get("selected_service")
@@ -293,7 +295,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         else:
                             response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Kosa: Sehemu ya huduma haikupatikana."}}
                             
-                    # ... (ACCOUNT_FLOW_ID_2 routing remains) ...
+                    
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
                         if current_screen == "PROFILE_UPDATE":
                             new_name = user_data.get("name", "N/A")
@@ -343,7 +345,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
             from_number = message.get("from")
             message_type = message.get("type")
             
-            # Extract user name if available (useful for logging/storage)
             user_name = next((contact.get("profile", {}).get("name") for contact in contacts if contact.get("wa_id") == from_number), from_number)
             
             if message_type == "text":
