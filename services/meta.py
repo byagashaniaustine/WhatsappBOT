@@ -95,7 +95,7 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
     return send_manka_menu_template(
         to=to,
         template_name="manka_menu_02",
-        language_code="sw",   # or "en" — whatever your template uses
+        language_code="en",   # or "en" — whatever your template uses
         components=components
     )
 # ==============================================================
