@@ -104,7 +104,7 @@ async def whatsapp_menu(data: dict, user_data: dict = None):
     if not from_number.startswith("+"):
         from_number = "+" + from_number
         
-    
+    logger.critical(f"📲 whatsapp_menu triggered for number: {from_number}")
     # --- 1. LOAN CALCULATION AND SENDING BLOCK (Only runs if user_data is provided) ---
     if user_data:
         try:
@@ -112,8 +112,9 @@ async def whatsapp_menu(data: dict, user_data: dict = None):
             principal = float(user_data.get("principal", 0))
             duration = int(user_data.get("duration", 0))
             rate = float(user_data.get("rate", 0))
-            
-            logger.critical(f"✅ Obtained (Loan Block): P={principal}, D={duration}, R={rate}")
+            number=from_number
+
+            logger.critical(f"✅ Obtained (Loan Block): P={principal}, D={duration}, R={rate} and user number: {number}")
 
             # Perform Calculation
             monthly_payment, total_payment, total_interest = calculate_loan(principal, duration, rate)
@@ -136,7 +137,7 @@ async def whatsapp_menu(data: dict, user_data: dict = None):
                 )
                 logger.critical("💬 Loan calculation results message sent from whatsapp_menu.")
             else:
-                logger.error("❌ Cannot send loan result message: Recipient number is missing.")
+                logger.error(f"❌ Cannot send loan result message: {from_number} Recipient number is missing.")
 
             # FIX: Must return here to prevent falling into the text message logic below.
             return JSONResponse({"status": "ok", "message": "Loan calculation processed in background."})
