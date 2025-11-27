@@ -217,6 +217,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     # Call the dedicated function, which returns the LOAN_RESULT payload
                                     response_obj = calculate_loan_results(user_data) 
                                     logger.critical(f"{response_obj}✅ Loan calculation delegated and successful.")
+                                    # --- START MODIFIED LOGGING HERE ---
+                                    if response_obj and response_obj.get("data"):
+                                      data = response_obj["data"]
+                                      logger.critical(f"📊 [CALC RESULT LOG] Monthly: {data.get('monthly_payment')} | Total Interest: {data.get('total_interest')}")
+                                # --- END MODIFIED LOGGING HERE ---
                                 except ValueError:
                                     response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
                                 except Exception:
