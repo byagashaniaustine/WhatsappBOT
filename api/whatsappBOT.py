@@ -40,7 +40,10 @@ def calculate_loan(principal: float, duration: int, rate: float):
     # Return raw numbers for precise use
     return monthly_payment, total_payment, total_interest
 
-# --- MODIFIED CORE HANDLER ---
+
+
+
+
 def calculate_loan_results(user_data: dict):
     """
     Performs the loan calculation, sends the WhatsApp message, 
@@ -69,6 +72,16 @@ def calculate_loan_results(user_data: dict):
         return {"screen": "MAIN_MENU", "data": {"error": "Invalid input"}}
 
     # 3. Send WhatsApp Message (Immediate Action)
+    send_meta_whatsapp_message(
+        from_number,
+        f"Habari!\n"
+        f"Matokeo ya mkopo wako (TZS {principal:,.0f} kwa {duration} miezi) yamekamilika:\n\n"
+        f"💰 **Malipo ya Kila Mwezi:** TZS {monthly_payment:,.0f}\n"
+        f"Jumla ya Riba: TZS {total_interest:,.0f}\n"
+        f"Jumla ya Kulipa: TZS {total_payment:,.0f}\n\n"
+        "Tafadhali angalia skrini yako ya WhatsApp kwa hatua inayofuata. Asante!"
+    )
+    logger.critical("💬 Loan calculation results message sent via WhatsApp.")
     
 
     # 4. Format and Return Flow Response (To display LOAN_RESULT screen)
@@ -87,13 +100,12 @@ def calculate_loan_results(user_data: dict):
     }
     
     logger.critical(f"Flow routing answer: {response_screen} ➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
-    send_meta_whatsapp_message(from_number,
-                               f"Matokeo ya mkopo wako ni:\nKiasi cha kurudisha kila mwezi: TZS {monthly_payment:,.0f}\n"
-                               f"Jumla ya riba: TZS {total_interest:,.0f}\n"
-                               f"Jumla ya kulipa: TZS {total_payment:,.0f}  \n"
-                               "Asante kwa kutumia huduma zetu!   ")
-    logger.critical("💬 Loan calculation results message sent via WhatsApp.")
     return response_screen
+
+
+
+
+
 
 
 async def whatsapp_menu(data: dict):
