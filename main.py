@@ -17,7 +17,7 @@ except ImportError:
 
 # --- Import only necessary functions from whatsappBOT ---
 # Renamed and updated handler is now required
-from api.whatsappBOT import whatsapp_handler, calculate_loan_results 
+from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url 
 
@@ -232,7 +232,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     handler_data = {"From": primary_from_number}
                                     
                                     # Delegate the combined task: calculate and send message
-                                    background_tasks.add_task(  # Contains 'From' number
+                                    background_tasks.add_task(
+                                        whatsapp_menu, 
                                         principal,       # loan value 1
                                         duration,        # loan value 2
                                         rate             # loan value 3
@@ -332,7 +333,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 if from_number:
                     logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
                     # Use whatsapp_handler for text messages (no loan params passed)
-                    background_tasks.add_task(whatsapp_handler, {"From": from_number, "Body": user_text})
+                    background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
             
             # --- START MEDIA MESSAGE HANDLING (UNCHANGED) ---
             elif message_type in ["image", "document"]:
