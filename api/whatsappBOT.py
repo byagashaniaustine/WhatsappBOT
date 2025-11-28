@@ -63,8 +63,8 @@ def calculate_loan_results(user_data: dict):
         "screen": "LOAN_RESULT", 
         "data": {
             "principal": f"{principal:,.0f}",  
-            "duration": str(duration),
-            "rate": str(rate),
+            "duration": duration,
+            "rate": rate,
             "monthly_payment": f"{monthly_payment:,.0f}",
             "total_payment": f"{total_payment:,.0f}",
             "total_interest": f"{total_interest:,.0f}"
