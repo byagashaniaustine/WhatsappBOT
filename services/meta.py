@@ -1,5 +1,5 @@
 import os
-import uuid # Included here for completeness, though likely used elsewhere
+import uuid 
 import logging
 import requests
 from typing import Dict, Any, Optional, List
@@ -49,7 +49,7 @@ def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     try:
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
-        logger.info(f"✅ Message sent to {to}.")
+        logger.info(f"✅ Text message sent to {to}.")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Error sending message to {to}: {e}")
@@ -94,8 +94,6 @@ def send_meta_whatsapp_template(
 
     try:
         logger.info(f"🚀 Sending Template '{template_name}' to {to}")
-        # NOTE: Payload logging moved to DEBUG level in a real environment
-        # logger.debug(f"📦 Payload: {payload}") 
         
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
@@ -113,27 +111,16 @@ def send_meta_whatsapp_template(
         raise RuntimeError(f"Meta Template API call failed: {e}")
 
 # ==============================================================
-# SEND MANKA MENU TEMPLATE (IMPROVED FOR FLOW TOKEN)
+# SEND MANKA MENU TEMPLATE (IMPROVED FOR FLOW TOKEN) (UNCHANGED)
 # ==============================================================
 def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[str, Any]:
     """
     Send the manka_menu template with flow button, embedding a unique flow_token (UUID).
-    
-    Args:
-        to: Recipient phone number
-        flow_token: The UUID generated in whatsappBOT.py to tie the session.
-                    Defaults to "unused" if not provided.
-    
-    Returns:
-        API response as dictionary
     """
-    # 🎯 FIX: Accept flow_token parameter to resolve TypeError
-    # 🎯 FIX: Use provided flow_token, defaulting to "unused" if None
     final_flow_token = flow_token if flow_token else "unused"
 
     logger.critical(f"🔑 Embedding flow_token into template: {final_flow_token}")
 
-    # Define the flow button component required by the manka_menu template
     components = [
         {
             "type": "button",
@@ -143,7 +130,6 @@ def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[
                 {
                     "type": "action",
                     "action": {
-                        # 🎯 FIX: Embed the dynamic flow_token here (UUID)
                         "flow_token": final_flow_token, 
                         "flow_action_data": {
                             "screen": "MAIN_MENU"
@@ -160,6 +146,51 @@ def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[
         language_code="en",
         components=components
     )
+
+# ==============================================================
+# NEW: SEND INTERACTIVE QUICK REPLY MESSAGE
+# ==============================================================
+async def send_quick_reply_message(to: str, body: str, buttons: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Send an interactive Quick Reply message with buttons.
+    
+    Args:
+        to: Recipient phone number.
+        body: The main text content (including the loan results).
+        buttons: A list of button objects (e.g., [{"type": "reply", "reply": {"id": "APPLY_ID", "title": "Apply Now"}}]).
+    """
+    if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
+        raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": body
+            },
+            "action": {
+                "buttons": buttons
+            }
+        }
+    }
+
+    try:
+        logger.info(f"💬 Sending Quick Reply message to {to}.")
+        response = requests.post(API_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        logger.info(f"✅ Quick Reply sent successfully to {to}.")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Error sending Quick Reply to {to}: {e}", exc_info=True)
+        raise RuntimeError(f"Meta Quick Reply API call failed: {e}")
 
 # ==============================================================
 # GET MEDIA DOWNLOAD URL (UNCHANGED)

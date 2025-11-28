@@ -1,11 +1,11 @@
-import uuid # <-- NEW: Import uuid for session token generation
+import uuid 
 import logging
-from typing import Optional # <-- NEW: Import Optional for clearer type hints
+from typing import Optional 
 
 from fastapi.responses import JSONResponse
-from services.meta import send_meta_whatsapp_message, send_manka_menu_template
-from services.supabase import store_session_data, get_session_phone_by_id # Assumed to be imported
-# NOTE: We assume 'store_session_data' has been modified to accept an optional 'session_id' (the UUID)
+# *** MODIFIED: Importing send_quick_reply_message ***
+from services.meta import send_meta_whatsapp_message, send_manka_menu_template, send_quick_reply_message 
+from services.supabase import store_session_data, get_session_phone_by_id 
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.DEBUG)
@@ -14,14 +14,6 @@ logger.setLevel(logging.DEBUG)
 def calculate_loan(principal: float, duration: int, rate: float):
     """
     Calculate monthly payment, total payment, and total interest for a loan.
-    
-    Args:
-        principal: Loan amount
-        duration: Loan duration in months
-        rate: Monthly interest rate as a percentage
-        
-    Returns:
-        tuple: (monthly_payment, total_payment, total_interest)
     """
     if duration <= 0 or principal <= 0:
         raise ValueError("Principal and duration must be positive.")
@@ -50,7 +42,6 @@ def calculate_loan(principal: float, duration: int, rate: float):
 def calculate_loan_results(user_data: dict):
     """
     Generate Flow UI response for loan calculation results.
-    This function is called to prepare the LOAN_RESULT screen data.
     """
     # Retrieve Input Data
     principal = float(user_data.get("principal", 0))
@@ -86,10 +77,10 @@ def calculate_loan_results(user_data: dict):
 
 async def whatsapp_menu(
     from_number: str,
-    principal: Optional[float] = None, # Added Optional type hint
-    duration: Optional[int] = None,    # Added Optional type hint
-    rate: Optional[float] = None,      # Added Optional type hint
-    user_text: Optional[str] = None    # Added Optional type hint
+    principal: Optional[float] = None, 
+    duration: Optional[int] = None,    
+    rate: Optional[float] = None,      
+    user_text: Optional[str] = None    
 ):
     """
     Unified WhatsApp message handler.
@@ -102,35 +93,46 @@ async def whatsapp_menu(
     logger.critical(f"📱 whatsapp_menu called for: {from_number}")
     
     # ========================================================================
-    # MODE 1: LOAN CALCULATION (from Flow background task)
+    # MODE 1: LOAN CALCULATION (from Flow background task) - NOW SENDS QUICK REPLY
     # ========================================================================
     if principal is not None and duration is not None and rate is not None:
-        logger.critical(f"🧮 LOAN CALCULATION MODE activated")
-        # ... (Calculation and sending logic remains the same) ...
+        logger.critical(f"🧮 LOAN CALCULATION MODE activated - Sending Quick Reply.")
         
         try:
-            # Perform calculation
+            # 1. Perform calculation
             monthly_payment, total_payment, total_interest = calculate_loan(
                 principal, duration, rate
             )
             
-            # Format message in Swahili
-            msg = (
-                f"Habari!\n"
-                f"Matokeo ya mkopo wako (TZS {principal:,.0f} kwa {duration} miezi):\n\n"
+            # 2. Format message body (This is the primary text the user sees)
+            body_text = (
+                f"✅ *Matokeo ya Mkopo Yamekamilika:*\n"
+                f"Kiasi: TZS {principal:,.0f} kwa {duration} miezi\n"
+                f"--------------------------\n"
                 f"💰 Malipo ya Kila Mwezi: TZS {monthly_payment:,.0f}\n"
                 f"💵 Jumla ya Kulipa: TZS {total_payment:,.0f}\n"
-                f"📈 Jumla ya Riba: TZS {total_interest:,.0f}"
+                f"📈 Jumla ya Riba: TZS {total_interest:,.0f}\n\n"
+                f"Chagua hatua inayofuata:"
             )
             
-            # Send the message
-            send_meta_whatsapp_message(from_number, msg)
+            # 3. Define the quick reply buttons
+            buttons = [
+                {"type": "reply", "reply": {"id": "APPLY_ID", "title": "Tuma Ombi Sasa (Apply)"}},
+                {"type": "reply", "reply": {"id": "MENU_ID", "title": "Rudi Mwanzo (Menu)"}}
+            ]
             
-            logger.critical(f"✅ Loan calculation results sent to {from_number}")
+            # 4. CRITICAL: Send the Interactive Quick Reply Message
+            await send_quick_reply_message(
+                to=from_number, 
+                body=body_text, 
+                buttons=buttons
+            )
+            
+            logger.critical(f"✅ Loan results sent via Quick Reply to {from_number}")
             
             return JSONResponse({
                 "status": "ok",
-                "message": "calculation sent",
+                "message": "quick reply sent",
                 "to": from_number
             })
             
@@ -143,7 +145,7 @@ async def whatsapp_menu(
             return JSONResponse({"status": "error", "message": "invalid parameters"})
             
         except Exception as e:
-            logger.error(f"❌ Calculation failed: {e}", exc_info=True)
+            logger.error(f"❌ Calculation or sending failed: {e}", exc_info=True)
             send_meta_whatsapp_message(
                 from_number,
                 "Samahani, tatizo limetokea wakati wa kukokotoa mkopo."
@@ -171,7 +173,6 @@ async def whatsapp_menu(
                 logger.critical(f"🆕 Generated new flow_token (UUID): {new_flow_token}")
 
                 # 2. STORE PHONE NUMBER AGAINST THIS UUID (The dot connection)
-                # NOTE: This assumes store_session_data is modified to accept session_id
                 session_id = await store_session_data(
                     phone_number=from_number, 
                     message=user_text, 
@@ -180,7 +181,6 @@ async def whatsapp_menu(
                 logger.critical(f"💾 Phone stored against UUID/token: {session_id}")
                 
                 # 3. SEND MENU TEMPLATE, EMBEDDING THE UUID
-                # This ensures the UUID returns in the 'flow_token' field of the webhook.
                 send_manka_menu_template(to=from_number, flow_token=new_flow_token)
                 
                 logger.critical(f"✅ Menu template sent to {from_number}, token embedded.")
