@@ -20,6 +20,7 @@ except ImportError:
 # Import WhatsApp handling functions
 from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
 from api.whatsappfile import process_file_upload
+# NOTE: Assuming send_quick_reply_message and get_media_url are imported from services.meta
 from services.meta import send_meta_whatsapp_message, get_media_url
 
 # Setup logging
@@ -129,15 +130,12 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         payload = json.loads(raw_body.decode('utf-8'))
         logger.critical("JSON Parsed Successfully.")
 
-        # --- Extract Primary Phone Number from payload ---
+        # --- Extract Metadata ---
         entry = payload.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
         contacts = value.get("contacts", [])
-        
-        metadata = value.get("metadata", {})
-        display_phone_number = metadata.get("display_phone_number")
         
         # Determine if it's a Flow payload
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
@@ -145,21 +143,13 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         iv_b64 = payload.get("initial_vector")
         is_flow_payload = encrypted_flow_b64 and encrypted_aes_key_b64 and iv_b64
         
-        # Safely extract primary_from_number 
+        # Safely extract primary_from_number from standard locations in the webhook payload
         primary_from_number: Optional[str] = None
         
-        if is_flow_payload:
-            if contacts and len(contacts) > 0:
-                primary_from_number = contacts[0].get("wa_id")
-            elif messages and len(messages) > 0:
-                primary_from_number = messages[0].get("from")
-            elif display_phone_number:
-                primary_from_number = display_phone_number
-            
-            if not primary_from_number:
-                logger.critical("⚠️ Flow payload has no phone in standard locations - relying entirely on Flow state.")
-        else:
-            primary_from_number = messages[0].get("from") if messages and messages[0].get("from") else None
+        if messages and messages[0].get("from"):
+            primary_from_number = messages[0].get("from")
+        elif contacts and contacts[0].get("wa_id"):
+            primary_from_number = contacts[0].get("wa_id")
 
         # Ensure phone number has + prefix
         if primary_from_number and not primary_from_number.startswith("+"):
@@ -193,79 +183,75 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 current_flow_screens = FLOW_DEFINITIONS.get(flow_id_key)
                 response_obj = None
                 
-                # 🔑 CRITICAL: EXTRACT AND PROPAGATE PHONE NUMBER 
                 
-                # 1. On INIT (or Flow closure), capture phone from webhook payload and inject into user_data
-                if action == "INIT" and primary_from_number:
-                    user_data["from_number"] = primary_from_number
-                    logger.critical(f"🔑 INIT: Injected phone {primary_from_number} into Flow state.")
-                
-                # 2. For all other actions, retrieve phone from Flow state (if present)
-                elif user_data.get("from_number"):
-                    # Update primary_from_number from the propagated state for delegation purposes
-                    primary_from_number = user_data["from_number"] 
-                    logger.critical(f"🔑 EXTRACTED: Phone {primary_from_number} from existing Flow state.")
+                # 🔑 CRITICAL FIX: GUARANTEE PHONE NUMBER PROPAGATION 
+                # This ensures the final message can be sent even if the webhook payload is sparse.
+                best_phone = primary_from_number if primary_from_number else user_data.get("from_number")
+
+                if best_phone:
+                    user_data["from_number"] = best_phone
+                    primary_from_number = best_phone # Update local variable for immediate use
+                    logger.critical(f"🔑 Propagated Phone: {primary_from_number} stored/retrieved from Flow state.")
+                else:
+                    logger.error("❌ CRITICAL: Phone number could not be determined from payload or Flow state.")
                 
                 # The primary_from_number variable now holds the best available phone number for delegation.
+
 
                 # 1. PING RESPONSE (UNCHANGED)
                 if action == "ping":
                     response_obj = FLOW_DEFINITIONS["HEALTH_CHECK_PING"]
                     logger.critical("✅ [PING] Responded with HEALTH_CHECK_PING definition.")
                 
-                # 2. SUCCESS ACTION (MODIFIED: Re-calculate and Send Final Message)
+                # 2. SUCCESS ACTION (FINAL MESSAGE SEND)
                 elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
+                    
                     response_obj = json.loads(json.dumps(current_flow_screens["SUCCESS_RESPONSE"])) 
                     if flow_token:
                         success_params = response_obj["data"]["extension_message_response"]["params"]
                         success_params["flow_token"] = flow_token
                         logger.critical(f"Flow {flow_id_key} finalized.")
                     
-                    # ⭐ FIX: Re-calculate and send the message upon SUCCESS
+                    # ⭐ LOAN FLOW FINALIZATION: Re-calculate and send the message upon SUCCESS
                     if flow_id_key == "LOAN_FLOW_ID_1":
                         
                         final_phone = primary_from_number 
                         
-                        if final_phone:
+                        if final_phone: # This check is now robust due to the fix above
                             
                             # 1. Get the raw inputs from the final Flow state
                             try:
-                                # Inputs are typically strings from the Flow UI
-                                principal_str = user_data.get("principal")
-                                duration_str = user_data.get("duration")
-                                rate_str = user_data.get("rate")
-                                
-                                # Convert/Validate inputs
-                                principal = float(principal_str) if principal_str else 0.0
-                                duration = int(duration_str) if duration_str else 0
-                                rate = float(rate_str) if rate_str else 0.0
+                                # Ensure safe casting from potentially missing/null string inputs
+                                principal = float(user_data.get("principal", 0.0) or 0.0)
+                                duration = int(user_data.get("duration", 0) or 0)
+                                rate = float(user_data.get("rate", 0.0) or 0.0)
                                 
                                 if principal <= 0 or duration <= 0:
                                     raise ValueError("Invalid loan parameters for final check.")
 
                             except (ValueError, TypeError) as e:
                                 logger.error(f"❌ SUCCESS: Invalid loan data received for final message: {e}", exc_info=True)
-                                # Send a simple error message instead of the calculation
+                                # Send a user-facing error message instead of the calculation
                                 background_tasks.add_task(send_meta_whatsapp_message, final_phone, "Samahani, tumeshindwa kukokotoa upya mkopo wako. Tafadhali jaribu tena.")
                                 return response_obj 
 
-                            # 2. Delegate the message send using the raw inputs
+                            # 2. Delegate the Quick Reply message send using the raw inputs
                             background_tasks.add_task(
                                 whatsapp_menu, 
                                 final_phone,  
-                                principal,    # Pass raw principal (float)
-                                duration,     # Pass raw duration (int)
-                                rate,         # Pass raw rate (float)
-                                None          # user_text is None
+                                principal,    
+                                duration,     
+                                rate,         
+                                None          
                             )
-                            logger.critical(f"✅ FINAL MESSAGE: Loan message task queued upon SUCCESS for {final_phone} (Re-calculation based).")
+                            logger.critical(f"✅ FINAL MESSAGE: Loan Quick Reply task queued upon SUCCESS for {final_phone}.")
                         else:
                             logger.error("❌ FINAL MESSAGE: Phone number still missing at SUCCESS action. Cannot send message.")
 
 
                 # 3. INIT ACTION (UNCHANGED)
                 elif action == "INIT":
-                    # Screen routing, ensuring user_data (with 'from_number') is propagated
+                    # The user_data already contains the phone number due to the fix above
                     if flow_id_key == "LOAN_FLOW_ID_1":
                         response_obj = {"screen": "MAIN_MENU", "data": user_data} 
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
@@ -274,7 +260,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     else:
                         response_obj = FLOW_DEFINITIONS["ERROR"]
                 
-                # 4. DATA EXCHANGE ACTION (MODIFIED: Removed temporary data saving)
+                # 4. DATA EXCHANGE ACTION (UNCHANGED)
                 elif action == "data_exchange":
                     
                     # Check for immediate error report from client (UNCHANGED)
@@ -295,12 +281,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                 try:
                                     # 1. Calculate and get Flow UI response (sync)
                                     response_obj = calculate_loan_results(user_data)
+                                    # 2. Phone is already in user_data and will be propagated.
                                     
-                                    # 2. FIX: REMOVED the logic to save user_data["calculated_loan_data"] 
-                                    logger.critical("💾 Removed temporary loan results saving. Relying on re-calculation at SUCCESS.")
-                                    
-                                    # 3. DO NOT delegate the WhatsApp message here!
-
                                 except ValueError as ve:
                                     logger.critical(f"❌ Invalid loan parameters: {ve}")
                                     response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
@@ -344,6 +326,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
                 # --- Encrypt and return response (UNCHANGED) ---
                 if response_obj is not None:
+                    # ... (Encryption logic remains the same) ...
                     flipped_iv = bytes([b ^ 0xFF for b in iv]) 
                     cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
                     response_json_string = json.dumps(response_obj)
@@ -362,7 +345,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse("Failed to process flow payload due to internal error.", status_code=500)
 
         # ========================================================================
-        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media) (RESTORED)
+        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media) (UNCHANGED)
         # ========================================================================
         
         if messages:
@@ -425,10 +408,14 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         send_meta_whatsapp_message(from_number, "Samahani, kuna hitilafu imetokea wakati tukipakia faili lako.")
 
             
-            # Handle INTERACTIVE messages (Flow closure notifications)
+            # Handle INTERACTIVE messages (Flow closure notifications, Quick Replies)
             elif message_type == "interactive":
                 logger.critical(f"💬 Received Interactive message from {from_number}")
-                # Add logic here to handle button replies, list replies, etc., if needed.
+                # If this is a Quick Reply from the loan result, you'd handle the button ID here.
+                # Example:
+                # button_id = message.get("interactive", {}).get("button_reply", {}).get("id")
+                # if button_id == "APPLY_ID":
+                #     send_meta_whatsapp_message(from_number, "Asante! Tunaandaa ombi lako la mkopo.")
                 
             else:
                 logger.critical(f"Received unhandled message type: {message_type} from {from_number}")
