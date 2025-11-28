@@ -1,5 +1,5 @@
 import os
-import uuid
+import uuid # Included here for completeness, though likely used elsewhere
 import logging
 import requests
 from typing import Dict, Any, Optional, List
@@ -16,28 +16,20 @@ logger.setLevel(logging.INFO)
 ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
 
-# WhatsApp Cloud API version (Consistent with recent Meta API logs)
+# WhatsApp Cloud API version (Using the latest version in your code)
 API_VERSION = "v21.0" 
 
 API_URL = f"https://graph.facebook.com/{API_VERSION}/{PHONE_NUMBER_ID}/messages"
 MEDIA_API_BASE_URL = f"https://graph.facebook.com/{API_VERSION}/"
 
-# TEMPORARY DEBUGGING LINE - CHECK THIS OUTPUT IN RAILWAY LOGS!
 logger.info(f"*** DEBUG: Using PHONE_NUMBER_ID: {PHONE_NUMBER_ID} for API_URL: {API_URL}")
 
 # ==============================================================
-# SEND SIMPLE WHATSAPP TEXT MESSAGE
+# SEND SIMPLE WHATSAPP TEXT MESSAGE (UNCHANGED)
 # ==============================================================
 def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     """
     Send a simple text message via WhatsApp.
-    
-    Args:
-        to: Recipient phone number (with country code)
-        body: Message text content
-    
-    Returns:
-        API response as dictionary
     """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
@@ -57,14 +49,14 @@ def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     try:
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
-        logger.info(f"✅ Message sent to {to}. Response: {response.json()}")
+        logger.info(f"✅ Message sent to {to}.")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Error sending message to {to}: {e}")
         raise RuntimeError(f"Meta API call failed: {e}")
 
 # ==============================================================
-# SEND WHATSAPP TEMPLATE MESSAGE WITH FLOW BUTTON
+# SEND WHATSAPP TEMPLATE MESSAGE WITH FLOW BUTTON (UNCHANGED)
 # ==============================================================
 def send_meta_whatsapp_template(
     to: str,
@@ -74,15 +66,6 @@ def send_meta_whatsapp_template(
 ) -> Dict[str, Any]:
     """
     Send a WhatsApp template message.
-    
-    Args:
-        to: Recipient phone number (with country code, no + sign)
-        template_name: Name of the approved template
-        language_code: Language code (default: "en")
-        components: Optional list of component objects for dynamic content
-    
-    Returns:
-        API response as dictionary
     """
     if not ACCESS_TOKEN or not PHONE_NUMBER_ID:
         raise EnvironmentError("META_ACCESS_TOKEN or WA_PHONE_NUMBER_ID missing.")
@@ -111,12 +94,13 @@ def send_meta_whatsapp_template(
 
     try:
         logger.info(f"🚀 Sending Template '{template_name}' to {to}")
-        logger.info(f"📦 Payload: {payload}")
+        # NOTE: Payload logging moved to DEBUG level in a real environment
+        # logger.debug(f"📦 Payload: {payload}") 
         
         response = requests.post(API_URL, json=payload, headers=headers)
         response.raise_for_status()
         
-        logger.info(f"✅ Template sent successfully: {response.json()}")
+        logger.info(f"✅ Template sent successfully.")
         return response.json()
         
     except requests.exceptions.HTTPError as e:
@@ -129,19 +113,26 @@ def send_meta_whatsapp_template(
         raise RuntimeError(f"Meta Template API call failed: {e}")
 
 # ==============================================================
-# SEND MANKA MENU TEMPLATE (CONVENIENCE FUNCTION)
+# SEND MANKA MENU TEMPLATE (IMPROVED FOR FLOW TOKEN)
 # ==============================================================
-def send_manka_menu_template(to: str) -> Dict[str, Any]:
+def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[str, Any]:
     """
-    Send the manka_menu template with flow button.
-    This is a convenience function for the main menu template.
+    Send the manka_menu template with flow button, embedding a unique flow_token (UUID).
     
     Args:
         to: Recipient phone number
+        flow_token: The UUID generated in whatsappBOT.py to tie the session.
+                    Defaults to "unused" if not provided.
     
     Returns:
         API response as dictionary
     """
+    # 🎯 FIX: Accept flow_token parameter to resolve TypeError
+    # 🎯 FIX: Use provided flow_token, defaulting to "unused" if None
+    final_flow_token = flow_token if flow_token else "unused"
+
+    logger.critical(f"🔑 Embedding flow_token into template: {final_flow_token}")
+
     # Define the flow button component required by the manka_menu template
     components = [
         {
@@ -152,7 +143,8 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
                 {
                     "type": "action",
                     "action": {
-                        "flow_token": "unused",
+                        # 🎯 FIX: Embed the dynamic flow_token here (UUID)
+                        "flow_token": final_flow_token, 
                         "flow_action_data": {
                             "screen": "MAIN_MENU"
                         }
@@ -170,17 +162,11 @@ def send_manka_menu_template(to: str) -> Dict[str, Any]:
     )
 
 # ==============================================================
-# GET MEDIA DOWNLOAD URL
+# GET MEDIA DOWNLOAD URL (UNCHANGED)
 # ==============================================================
 def get_media_url(media_id: str) -> str:
     """
     Get the download URL for a media file from WhatsApp.
-    
-    Args:
-        media_id: The media ID from WhatsApp
-    
-    Returns:
-        Download URL as string
     """
     if not ACCESS_TOKEN:
         raise EnvironmentError("META_ACCESS_TOKEN missing for media lookup.")
