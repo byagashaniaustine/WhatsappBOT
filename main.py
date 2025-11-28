@@ -370,14 +370,16 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
                 # Queue background task for text message handling
                 background_tasks.add_task(
-                                        process_file_upload,
-                                        user_id=from_number,
-                                        user_name=user_name,
-                                        user_phone=from_number,
-                                        flow_type="REGULAR_MEDIA",  # or whatever makes sense for your flow
-                                        media_url=media_url,
-                                        mime_type=mime_type
-                                     )
+    process_file_upload,
+    user_id=from_number,
+    user_name=user_name,
+    user_phone=from_number,
+    flow_type="REGULAR_MEDIA",  # or whichever flow type is appropriate
+    media_url=media_url,
+    mime_type=mime_type,
+    file_name=file_name
+)
+
 
             
             # Handle MEDIA messages (image, document, video, audio)
