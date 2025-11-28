@@ -133,7 +133,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
-        contacts = value.get("contacts", []) 
+        contacts = value.get("contacts", [])
+        
+        # Get metadata which contains the phone number for flows
+        metadata = value.get("metadata", {})
+        display_phone_number = metadata.get("display_phone_number")
         
         # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
@@ -146,12 +150,23 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         primary_from_number = None
         
         if is_flow_payload:
-            # Flow payloads have the phone in contacts array
+            # For Flow payloads, try multiple sources for phone number
+            # 1. First try contacts array
             if contacts and len(contacts) > 0:
                 primary_from_number = contacts[0].get("wa_id")
                 logger.critical(f"📞 [FLOW] Phone Number from contacts: {primary_from_number}")
-            else:
-                logger.critical("⚠️ Flow payload received but no contact info found!")
+            # 2. Then try messages array (some flows include this)
+            elif messages and len(messages) > 0:
+                primary_from_number = messages[0].get("from")
+                logger.critical(f"📞 [FLOW] Phone Number from messages: {primary_from_number}")
+            # 3. Finally try metadata
+            elif display_phone_number:
+                primary_from_number = display_phone_number
+                logger.critical(f"📞 [FLOW] Phone Number from metadata: {primary_from_number}")
+            
+            if not primary_from_number:
+                logger.critical("⚠️ Flow payload received but no contact info found in any location!")
+                logger.critical(f"🔍 DEBUG - Full payload structure: {json.dumps(payload, indent=2)}")
         else:
             # Regular messages have phone in messages array
             primary_from_number = messages[0].get("from") if messages and messages[0].get("from") else None
@@ -193,6 +208,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 if primary_from_number:
                     user_data["from_number"] = primary_from_number
                     logger.critical(f"✅ Injected phone number into user_data: {primary_from_number}")
+                else:
+                    logger.critical("⚠️ WARNING: No phone number available to inject into user_data")
 
                 # 1. PING RESPONSE
                 if action == "ping":
@@ -246,21 +263,22 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     
                                     if not phone_number:
                                         logger.error("❌ No phone number available for loan calculation message")
-                                        raise ValueError("Phone number missing")
-                                    
-                                    logger.critical(f"📞 Preparing to send loan calculation to: {phone_number}")
-                                    logger.critical(f"📊 Loan params: Principal={principal}, Duration={duration}, Rate={rate}")
-                                    
-                                    # Queue background task to send WhatsApp message
-                                    background_tasks.add_task(
-                                        whatsapp_menu, 
-                                        phone_number,  # Just the phone number
-                                        principal,     # loan principal amount
-                                        duration,      # loan duration
-                                        rate          # interest rate
-                                    )
-                                    
-                                    logger.critical(f"✅ Loan calculation message task queued for {phone_number}")
+                                        # Still return the calculation results to the Flow UI, but don't send WhatsApp message
+                                        logger.critical("⚠️ Proceeding with Flow UI update only (no WhatsApp message sent)")
+                                    else:
+                                        logger.critical(f"📞 Preparing to send loan calculation to: {phone_number}")
+                                        logger.critical(f"📊 Loan params: Principal={principal}, Duration={duration}, Rate={rate}")
+                                        
+                                        # Queue background task to send WhatsApp message
+                                        background_tasks.add_task(
+                                            whatsapp_menu, 
+                                            phone_number,  # Just the phone number
+                                            principal,     # loan principal amount
+                                            duration,      # loan duration
+                                            rate          # interest rate
+                                        )
+                                        
+                                        logger.critical(f"✅ Loan calculation message task queued for {phone_number}")
                                     
                                     # Log the calculation results
                                     if response_obj and response_obj.get("data"):
@@ -269,14 +287,15 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     
                                 except ValueError as ve:
                                     logger.critical(f"❌ Invalid loan parameters: {ve}")
+                                    # Return to calculator with error message
                                     response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
                                 except Exception as e:
-                                    logger.critical(f"❌ Error during calculation delegation: {e}", exc_info=True)
+                                    logger.critical(f"❌ Error during calculation: {e}", exc_info=True)
                                     response_obj = FLOW_DEFINITIONS["ERROR"]
                             
                             # Handle simple screen navigation
                             else:
-                                response_obj = {"next_screen": next_screen_key, "data": {}}
+                                response_obj = {"screen": next_screen_key, "data": {}}
                                 logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
                         
                         # Handle MAIN_MENU service selection
@@ -328,7 +347,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
                     
                     next_screen_name = response_obj.get('screen', 'STATUS_CHECK')
-                    logger.critical(f"Encrypted flow response generated. Next Screen: {next_screen_name}")
+                    logger.critical(f"✅ Encrypted flow response generated. Next Screen: {next_screen_name}")
                     return PlainTextResponse(full_resp_b64)
                 
                 return PlainTextResponse("Flow action processed, but no response object generated.", status_code=200)
