@@ -234,6 +234,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     # Delegate the combined task: calculate and send message
                                     background_tasks.add_task(
                                         whatsapp_menu, 
+                                        None,               # data dict not needed here
                                         principal,       # loan value 1
                                         duration,        # loan value 2
                                         rate             # loan value 3
