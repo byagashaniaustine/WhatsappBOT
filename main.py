@@ -396,13 +396,16 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         # 1. Get the direct download URL from Meta
                         media_url = get_media_url(media_id)
                         
-                        # 2. Queue background task to download and process the file
+                        
                         background_tasks.add_task(
-                            process_file_upload,
-                            from_number,
-                            media_url=media_url,
-                            mime_type=mime_type,
-                            file_name=file_name,
+                                process_file_upload,
+                                user_id=from_number,
+                                user_name=user_name,
+                                user_phone=from_number,
+                                flow_type="REGULAR_MEDIA",
+                                media_url=media_url,
+                                mime_type=mime_type,
+                               file_name=file_name
                         )
                         logger.critical(f"✅ Media processing task queued for {from_number}")
 
