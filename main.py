@@ -2,9 +2,9 @@ import os
 import json
 import base64
 import logging
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
-from starlette.responses import JSONResponse # Ensure JSONResponse is imported for consistency
+from starlette.responses import JSONResponse 
 
 # Import cryptography libraries
 try:
@@ -16,10 +16,10 @@ except ImportError:
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
 # --- Import only necessary functions from whatsappBOT ---
-# whatsapp_menu for text messages, calculate_loan_results for Flow calculation
-from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
+# Renamed and updated handler is now required
+from api.whatsappBOT import whatsapp_handler, calculate_loan_results 
 from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message, get_media_url # Ensure get_media_url is imported
+from services.meta import send_meta_whatsapp_message, get_media_url 
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
@@ -29,29 +29,17 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-# --- FLOW SCREEN DEFINITIONS (UNCHANGED from last successful flow update) ---
+# --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
 FLOW_DEFINITIONS = {
     "LOAN_FLOW_ID_1": { 
-        # Screen used for INIT and general routing
         "MAIN_MENU": {"screen": "MAIN_MENU", "data": {}},
-        
-        # Screen used for the primary input form
         "LOAN_CALCULATOR": {"screen": "LOAN_CALCULATOR", "data": {}}, 
-        
-        # Screen used to display calculated results (LOAN_RESULT has no input data to define)
         "LOAN_RESULT": {"screen": "LOAN_RESULT", "data": {}}, 
-        
-        # Placeholder screens for other menu options (if needed)
         "CREDIT_SCORE": {"screen": "CREDIT_SCORE", "data": {}},
         "LOAN_TYPES": {"screen": "LOAN_TYPES", "data": {}},
         "SERVICES": {"screen": "SERVICES", "data": {}}, 
-        
-        # --- NEW AFFORDABILITY SCREENS ---
         "AFFORDABILITY_CHECK": {"screen": "AFFORDABILITY_WELCOME", "data": {}},
         "DOCUMENT_REQUEST": {"screen": "DOCUMENT_REQUEST", "data": {}},
-        # --------------------------------
-        
-        # The SUCCESS action and response can remain, assuming SUBMIT_LOAN is the final action.
         "SUCCESS_ACTION": "SUBMIT_LOAN",
         "SUCCESS_RESPONSE": {
             "screen": "SUCCESS",
@@ -142,7 +130,19 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         payload = json.loads(raw_body.decode('utf-8'))
         logger.critical("JSON Parsed Successfully.")
 
-        # ---- Encrypted Flow Payload Handling (UNCHANGED) ----
+        # --- CRITICAL FIX 1: Extract Primary Phone Number from UNENCRYPTED payload ---
+        entry = payload.get("entry", [{}])[0]
+        changes = entry.get("changes", [{}])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+        contacts = value.get("contacts", []) 
+        
+        # Safely determine the primary sender number for ALL webhook types
+        primary_from_number = messages[0].get("from") if messages and messages[0].get("from") else None
+        logger.critical(f"📞 Primary Sender Number Detected: {primary_from_number}") 
+        # -----------------------------------------------------------------------------
+
+        # ---- Encrypted Flow Payload Handling ----
         encrypted_flow_b64 = payload.get("encrypted_flow_data")
         encrypted_aes_key_b64 = payload.get("encrypted_aes_key")
         iv_b64 = payload.get("initial_vector")
@@ -173,13 +173,19 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 current_flow_screens = FLOW_DEFINITIONS.get(flow_id_key)
                 response_obj = None
 
-                # 1. RESTORED PING RESPONSE (As requested)
+                # 🎯 FIX 2: Inject the Number for Flow data handling
+                if primary_from_number:
+                    user_data["From"] = primary_from_number
+                    logger.critical(f"✅ Injected 'From' number: {primary_from_number} into user_data for Flow.")
+                # -----------------------------------------------
+
+                # 1. RESTORED PING RESPONSE
                 if action == "ping":
                     response_obj = FLOW_DEFINITIONS["HEALTH_CHECK_PING"]
                     logger.critical("✅ [PING] Responded with original HEALTH_CHECK_PING definition.")
                 
+                # ... (SUCCESS_ACTION and INIT blocks remain unchanged) ...
                 elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
-                    # Success/Final action (e.g., SUBMIT_LOAN or SAVE_PROFILE)
                     response_obj = json.loads(json.dumps(current_flow_screens["SUCCESS_RESPONSE"])) 
                     if flow_token:
                         success_params = response_obj["data"]["extension_message_response"]["params"]
@@ -187,7 +193,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         logger.critical(f"Flow {flow_id_key} finalized.")
 
                 elif action == "INIT":
-                    # Initial request from the user to start the flow
                     if flow_id_key == "LOAN_FLOW_ID_1":
                         response_obj = {"screen": "MAIN_MENU", "data": {}}
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
@@ -207,39 +212,57 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         
                         next_screen_key = user_data.get("next_screen")
                         
-                        # --- START REFACTORED NEXT_SCREEN/CALCULATOR LOGIC ---
                         if next_screen_key and next_screen_key in FLOW_DEFINITIONS[flow_id_key]:
                             
                             # A. Handle LOAN_CALCULATOR -> LOAN_RESULT transition
                             if next_screen_key == "LOAN_RESULT" and current_screen == "LOAN_CALCULATOR":
                                 logger.critical("🎯 Calculating Loan Results before routing to LOAN_RESULT.")
                                 try:
-                                    # Call the dedicated function, which returns the LOAN_RESULT payload
+                                    # Call the dedicated function, which returns the LOAN_RESULT payload for the Flow UI
                                     response_obj = calculate_loan_results(user_data)
-                                    background_tasks.add_task(whatsapp_menu, user_data)  # Call whatsapp_menu to send the WhatsApp message
-                                    logger.critical(f"{response_obj}✅ Loan calculation delegated and successful.")
-                                    # --- START MODIFIED LOGGING HERE ---
+                                    
+                                    # --- CRITICAL FIX 3: Delegate the new combined handler ---
+                                    
+                                    # Extract the required loan parameters from the Flow data
+                                    principal = float(user_data.get("principal", 0))
+                                    duration = int(user_data.get("duration", 0))
+                                    rate = float(user_data.get("rate", 0))
+                                    
+                                    # Create the data dict required by whatsapp_handler for the 'From' number
+                                    handler_data = {"From": primary_from_number}
+                                    
+                                    # Delegate the combined task: calculate and send message
+                                    background_tasks.add_task(
+                                        whatsapp_handler, 
+                                        handler_data,    # Contains 'From' number
+                                        principal,       # loan value 1
+                                        duration,        # loan value 2
+                                        rate             # loan value 3
+                                    )
+                                    logger.critical(f"✅ Loan calculation and message sending delegated to whatsapp_handler.")
+                                    # --- END CRITICAL FIX 3 ---
+                                    
+                                    # --- MODIFIED LOGGING HERE ---
                                     if response_obj and response_obj.get("data"):
                                       data = response_obj["data"]
                                     logger.critical(f"📊 [CALC RESULT LOG] Monthly: {data.get('monthly_payment')} | Total Interest: {data.get('total_interest')}")
-                                # --- END MODIFIED LOGGING HERE ---
+                                    # --- END MODIFIED LOGGING HERE ---
                                 except ValueError:
                                     response_obj = {"screen": "LOAN_CALCULATOR", "data": {"error_message": "Tafadhali jaza nambari sahihi."}}
-                                except Exception:
+                                except Exception as e:
+                                    logger.error(f"❌ Error during calculation delegation: {e}")
                                     response_obj = FLOW_DEFINITIONS["ERROR"]
                             
-                            # B. Handle simple screen navigation (e.g., AFFORDABILITY_WELCOME -> DOCUMENT_REQUEST)
+                            # B. Handle simple screen navigation
                             else:
                                 response_obj = {"screen": next_screen_key, "data": {}}
                                 logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
-                        # --- END REFACTORED NEXT_SCREEN/CALCULATOR LOGIC ---
                         
                         
                         elif current_screen == "MAIN_MENU":
                             # Route based on service selection
                             next_screen_id = user_data.get("selected_service")
                             
-                            # 🎯 LOG RAW SELECTION and APPLY WORKAROUND
                             logger.critical(f"👀 MAIN_MENU Raw Selection: {next_screen_id}") 
                             
                             UNRESOLVED_TOKEN = "${form.menu_selection}"
@@ -256,10 +279,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                 response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Chaguo batili."}}
                         
                         else:
-                            # Fallback for unhandled LOAN_FLOW_ID_1 screens
                             response_obj = {"screen": "MAIN_MENU", "data": {"error_message": "Kosa: Sehemu ya huduma haikupatikana."}}
                             
-                    # 3. ACCOUNT FLOW ROUTING (ACCOUNT_FLOW_ID_2) - Unchanged
+                    # ... (ACCOUNT FLOW ROUTING remains unchanged) ...
                     elif flow_id_key == "ACCOUNT_FLOW_ID_2":
                         if current_screen == "PROFILE_UPDATE":
                             new_name = user_data.get("name", "N/A")
@@ -274,12 +296,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         response_obj = FLOW_DEFINITIONS["ERROR"]
 
                 else:
-                    # Default fallback: Unknown action
                     response_obj = {"screen": current_screen, "data": {"error_message": f"Action '{action}' not handled."}}
 
                 # --- END FLOW ROUTING LOGIC ---
                 
-                # 4️⃣ Encrypt and return response (Protected against 'None' response_obj)
+                # 4️⃣ Encrypt and return response (UNCHANGED)
                 if response_obj is not None:
                     flipped_iv = bytes([b ^ 0xFF for b in iv]) 
                     cipher_resp = AES.new(aes_key, AES.MODE_GCM, nonce=flipped_iv)
@@ -288,7 +309,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     full_resp = encrypted_resp_bytes + resp_tag
                     full_resp_b64 = base64.b64encode(full_resp).decode("utf-8")
                     
-                    # FIXED LOGGING: Using get() for safety, fallback to 'STATUS_CHECK'
                     next_screen_name = response_obj.get('screen', 'STATUS_CHECK')
                     logger.critical(f"Encrypted flow response generated. Next Screen: {next_screen_name}")
                     return PlainTextResponse(full_resp_b64)
@@ -300,11 +320,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse("Failed to process flow payload due to internal error.", status_code=500)
 
         # ---- Regular WhatsApp message handling (Text and Media) ----
-        entry = payload.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
-        contacts = value.get("contacts", [])
         
         if messages:
             message = messages[0]
@@ -318,10 +333,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 user_text = message.get("text", {}).get("body", "")
                 if from_number:
                     logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
-                    # Use whatsapp_menu for text
-                    background_tasks.add_task(whatsapp_menu, {"From": from_number, "Body": user_text})
+                    # Use whatsapp_handler for text messages (no loan params passed)
+                    background_tasks.add_task(whatsapp_handler, {"From": from_number, "Body": user_text})
             
-            # --- START MEDIA MESSAGE HANDLING ---
+            # --- START MEDIA MESSAGE HANDLING (UNCHANGED) ---
             elif message_type in ["image", "document"]:
                 media_data = message.get(message_type, {})
                 media_id = media_data.get("id")
@@ -331,11 +346,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     logger.critical(f"🖼️ Media Message received from {from_number} ({user_name}). Type: {message_type}, MIME: {mime_type}, ID: {media_id}")
                     
                     try:
-                        # 1. Get the direct download URL from Meta
                         media_url = get_media_url(media_id)
-                        
-                        # 2. Delegate the file processing (download, analyze, store) to the background
-                        # We use "AFFORDABILITY_CHECK" as the flow_type context for file processing
                         background_tasks.add_task(
                             process_file_upload, 
                             user_id=from_number, 
@@ -347,7 +358,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         )
                         
                     except RuntimeError as e:
-                        # Handle failure in getting media URL
                         logger.error(f"Failed to get media URL for {media_id}: {e}")
                         send_meta_whatsapp_message(from_number, "❌ Samahani, tulipata hitilafu kupata kiungo cha faili lako kutoka WhatsApp. Tafadhali jaribu tena.")
                         
