@@ -14,13 +14,13 @@ try:
     from Crypto.Cipher import PKCS1_OAEP, AES
     from Crypto.Util.Padding import unpad
 except ImportError:
+    # Ensure this dependency is available
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
 # Import WhatsApp handling functions
 from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
 from api.whatsappfile import process_file_upload
 from services.meta import send_meta_whatsapp_message, get_media_url
-# The database import is intentionally omitted as state is now managed via Flow payload
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
@@ -213,7 +213,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     response_obj = FLOW_DEFINITIONS["HEALTH_CHECK_PING"]
                     logger.critical("✅ [PING] Responded with HEALTH_CHECK_PING definition.")
                 
-                # 2. SUCCESS ACTION (MODIFIED: Final Delegation Point)
+                # 2. SUCCESS ACTION (MODIFIED: Re-calculate and Send Final Message)
                 elif current_flow_screens and action == current_flow_screens.get("SUCCESS_ACTION"):
                     response_obj = json.loads(json.dumps(current_flow_screens["SUCCESS_RESPONSE"])) 
                     if flow_token:
@@ -221,22 +221,44 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         success_params["flow_token"] = flow_token
                         logger.critical(f"Flow {flow_id_key} finalized.")
                     
-                    # ⭐ NEW LOGIC: Check for loan results and send the message upon closure
-                    if flow_id_key == "LOAN_FLOW_ID_1" and user_data.get("calculated_loan_data"):
+                    # ⭐ FIX: Re-calculate and send the message upon SUCCESS
+                    if flow_id_key == "LOAN_FLOW_ID_1":
                         
                         final_phone = primary_from_number 
-                        loan_data = user_data["calculated_loan_data"]
                         
                         if final_phone:
+                            
+                            # 1. Get the raw inputs from the final Flow state
+                            try:
+                                # Inputs are typically strings from the Flow UI
+                                principal_str = user_data.get("principal")
+                                duration_str = user_data.get("duration")
+                                rate_str = user_data.get("rate")
+                                
+                                # Convert/Validate inputs
+                                principal = float(principal_str) if principal_str else 0.0
+                                duration = int(duration_str) if duration_str else 0
+                                rate = float(rate_str) if rate_str else 0.0
+                                
+                                if principal <= 0 or duration <= 0:
+                                    raise ValueError("Invalid loan parameters for final check.")
+
+                            except (ValueError, TypeError) as e:
+                                logger.error(f"❌ SUCCESS: Invalid loan data received for final message: {e}", exc_info=True)
+                                # Send a simple error message instead of the calculation
+                                background_tasks.add_task(send_meta_whatsapp_message, final_phone, "Samahani, tumeshindwa kukokotoa upya mkopo wako. Tafadhali jaribu tena.")
+                                return response_obj 
+
+                            # 2. Delegate the message send using the raw inputs
                             background_tasks.add_task(
                                 whatsapp_menu, 
                                 final_phone,  
-                                loan_data["principal"], 
-                                loan_data["duration"],
-                                loan_data["rate"],          
-                                None           
+                                principal,    # Pass raw principal (float)
+                                duration,     # Pass raw duration (int)
+                                rate,         # Pass raw rate (float)
+                                None          # user_text is None
                             )
-                            logger.critical(f"✅ FINAL MESSAGE: Loan message task queued upon SUCCESS for {final_phone}")
+                            logger.critical(f"✅ FINAL MESSAGE: Loan message task queued upon SUCCESS for {final_phone} (Re-calculation based).")
                         else:
                             logger.error("❌ FINAL MESSAGE: Phone number still missing at SUCCESS action. Cannot send message.")
 
@@ -252,7 +274,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     else:
                         response_obj = FLOW_DEFINITIONS["ERROR"]
                 
-                # 4. DATA EXCHANGE ACTION (MODIFIED: Store Data, DO NOT Send Message)
+                # 4. DATA EXCHANGE ACTION (MODIFIED: Removed temporary data saving)
                 elif action == "data_exchange":
                     
                     # Check for immediate error report from client (UNCHANGED)
@@ -274,17 +296,8 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     # 1. Calculate and get Flow UI response (sync)
                                     response_obj = calculate_loan_results(user_data)
                                     
-                                    # 2. Extract and SAVE loan parameters in the Flow state for later
-                                    principal = float(user_data.get("principal", 0))
-                                    duration = int(user_data.get("duration", 0))
-                                    rate = float(user_data.get("rate", 0))
-                                    
-                                    user_data["calculated_loan_data"] = {
-                                        "principal": principal,
-                                        "duration": duration,
-                                        "rate": rate
-                                    }
-                                    logger.critical("💾 Loan results saved to Flow state for SUCCESS action.")
+                                    # 2. FIX: REMOVED the logic to save user_data["calculated_loan_data"] 
+                                    logger.critical("💾 Removed temporary loan results saving. Relying on re-calculation at SUCCESS.")
                                     
                                     # 3. DO NOT delegate the WhatsApp message here!
 
