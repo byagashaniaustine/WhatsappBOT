@@ -100,23 +100,30 @@ def store_file(
 ) -> dict | None:
     """
     Uploads user file to Supabase Storage + logs metadata.
+    Each file path includes a UUID to prevent duplicates.
     """
     try:
-        supabase_path = f"{user_id}/{file_name}"
+        # Generate a unique filename prefix
+        unique_prefix = uuid.uuid4().hex
+        supabase_path = f"{user_id}/{unique_prefix}_{file_name}"
 
+        # Validate MIME type
+        IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+        PDF_TYPE = "application/pdf"
         if mime_type not in IMAGE_TYPES + [PDF_TYPE]:
             raise ValueError(f"🚫 Unsupported file type: {mime_type}")
 
+        # Upload to Supabase
         upload_result = supabase.storage.from_("whatsapp_files").upload(
             supabase_path,
             file_data,
             {"content-type": mime_type},
         )
 
-        public_url = supabase.storage.from_("whatsapp_files").get_public_url(
-            supabase_path
-        )
+        # Get public URL
+        public_url = supabase.storage.from_("whatsapp_files").get_public_url(supabase_path)
 
+        # Insert metadata into database
         metadata = {
             "user_id": user_id,
             "user_name": user_name,
@@ -128,10 +135,8 @@ def store_file(
 
         supabase.table("wHatsappUsers").insert(metadata).execute()
 
-        return {
-            "file_url": public_url,
-            "file_type": mime_type,
-        }
+        logger.info(f"✅ File stored successfully: {supabase_path}")
+        return {"file_url": public_url, "file_type": mime_type}
 
     except Exception as e:
         logger.exception(f"❌ File storage failed for {user_phone}: {e}")
