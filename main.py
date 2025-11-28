@@ -232,9 +232,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                                     handler_data = {"From": primary_from_number}
                                     
                                     # Delegate the combined task: calculate and send message
-                                    background_tasks.add_task(
-                                        whatsapp_handler, 
-                                        handler_data,    # Contains 'From' number
+                                    background_tasks.add_task(  # Contains 'From' number
                                         principal,       # loan value 1
                                         duration,        # loan value 2
                                         rate             # loan value 3
