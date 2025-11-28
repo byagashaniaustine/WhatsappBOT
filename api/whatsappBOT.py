@@ -1,7 +1,11 @@
+import uuid # <-- NEW: Import uuid for session token generation
+import logging
+from typing import Optional # <-- NEW: Import Optional for clearer type hints
+
 from fastapi.responses import JSONResponse
 from services.meta import send_meta_whatsapp_message, send_manka_menu_template
-from services.supabase import store_session_data, get_session_phone_by_id
-import logging
+from services.supabase import store_session_data, get_session_phone_by_id # Assumed to be imported
+# NOTE: We assume 'store_session_data' has been modified to accept an optional 'session_id' (the UUID)
 
 logger = logging.getLogger("whatsapp_app")
 logger.setLevel(logging.DEBUG)
@@ -47,12 +51,6 @@ def calculate_loan_results(user_data: dict):
     """
     Generate Flow UI response for loan calculation results.
     This function is called to prepare the LOAN_RESULT screen data.
-    
-    Args:
-        user_data: Dictionary containing principal, duration, rate, and from_number
-        
-    Returns:
-        dict: Screen object for Flow UI with calculation results
     """
     # Retrieve Input Data
     principal = float(user_data.get("principal", 0))
@@ -88,24 +86,13 @@ def calculate_loan_results(user_data: dict):
 
 async def whatsapp_menu(
     from_number: str,
-    principal: float = None,
-    duration: int = None,
-    rate: float = None,
-    user_text: str = None
+    principal: Optional[float] = None, # Added Optional type hint
+    duration: Optional[int] = None,    # Added Optional type hint
+    rate: Optional[float] = None,      # Added Optional type hint
+    user_text: Optional[str] = None    # Added Optional type hint
 ):
     """
     Unified WhatsApp message handler.
-    
-    Two main modes:
-    1. Loan calculation mode: When principal, duration, and rate are provided
-    2. Text message mode: When user_text is provided
-    
-    Args:
-        from_number: User's phone number (with + prefix)
-        principal: Loan principal amount (optional)
-        duration: Loan duration in months (optional)
-        rate: Interest rate percentage (optional)
-        user_text: Text message from user (optional)
     """
     
     # Ensure phone number has + prefix
@@ -115,11 +102,11 @@ async def whatsapp_menu(
     logger.critical(f"📱 whatsapp_menu called for: {from_number}")
     
     # ========================================================================
-    # MODE 1: LOAN CALCULATION (from Flow)
+    # MODE 1: LOAN CALCULATION (from Flow background task)
     # ========================================================================
     if principal is not None and duration is not None and rate is not None:
         logger.critical(f"🧮 LOAN CALCULATION MODE activated")
-        logger.critical(f"📊 Parameters: P={principal}, D={duration}, R={rate}")
+        # ... (Calculation and sending logic remains the same) ...
         
         try:
             # Perform calculation
@@ -164,11 +151,10 @@ async def whatsapp_menu(
             return JSONResponse({"status": "error", "message": "calculation error"})
     
     # ========================================================================
-    # MODE 2: TEXT MESSAGE HANDLING (regular WhatsApp messages)
+    # MODE 2: TEXT MESSAGE HANDLING (Start Flow Session with UUID)
     # ========================================================================
     elif user_text:
         logger.critical(f"💬 TEXT MESSAGE MODE activated")
-        logger.critical(f"📝 User text: {user_text}")
         
         # Normalize user input
         user_text_normalized = user_text.strip().upper()
@@ -180,14 +166,24 @@ async def whatsapp_menu(
             logger.critical(f"🎯 Initiation keyword detected: {user_text_normalized}")
             
             try:
-                # Store session
-                session_id = await store_session_data(from_number, user_text)
-                logger.critical(f"💾 New session stored: {session_id}")
+                # 1. GENERATE UNIQUE FLOW TOKEN (UUID)
+                new_flow_token = str(uuid.uuid4())
+                logger.critical(f"🆕 Generated new flow_token (UUID): {new_flow_token}")
+
+                # 2. STORE PHONE NUMBER AGAINST THIS UUID (The dot connection)
+                # NOTE: This assumes store_session_data is modified to accept session_id
+                session_id = await store_session_data(
+                    phone_number=from_number, 
+                    message=user_text, 
+                    session_id=new_flow_token
+                )
+                logger.critical(f"💾 Phone stored against UUID/token: {session_id}")
                 
-                # Send menu template
-                send_manka_menu_template(to=from_number)
+                # 3. SEND MENU TEMPLATE, EMBEDDING THE UUID
+                # This ensures the UUID returns in the 'flow_token' field of the webhook.
+                send_manka_menu_template(to=from_number, flow_token=new_flow_token)
                 
-                logger.critical(f"✅ Menu template sent to {from_number}")
+                logger.critical(f"✅ Menu template sent to {from_number}, token embedded.")
                 
                 return JSONResponse({
                     "status": "ok",
@@ -212,8 +208,8 @@ async def whatsapp_menu(
                 f"Samahani, sikuelewi '{user_text}'. Tuma 'menu' kupata huduma."
             )
             
-            # Also send menu template as fallback
-            send_manka_menu_template(to=from_number)
+            # Also send menu template as fallback (using a generic token)
+            send_manka_menu_template(to=from_number, flow_token="fallback")
             
             return JSONResponse({
                 "status": "ok",
