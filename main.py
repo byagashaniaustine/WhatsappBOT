@@ -276,7 +276,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                             
                             # Handle simple screen navigation
                             else:
-                                response_obj = {"screen": next_screen_key, "data": {}}
+                                response_obj = {"next_screen": next_screen_key, "data": {}}
                                 logger.critical(f"Navigating via next_screen key to: {next_screen_key}")
                         
                         # Handle MAIN_MENU service selection
