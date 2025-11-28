@@ -44,42 +44,37 @@ def process_file_upload(
         if not file_name:
             file_name = f"{user_id}_{uuid.uuid4()}{ext}"
 
-        # Inform user that file is received
-        send_meta_whatsapp_message(user_phone, "Faili yako imepokelewa, tafadhali subiri uchambuzi.")
-
         analysis_summary = None
 
-        # PDF Analysis
+        # --- PDF Analysis ---
         if mime_type == ALLOWED_PDF_TYPE:
             logger.info("Starting PDF analysis...")
             result = analyze_pdf(file_data, file_name, user_name)
-            # If Manka fails, fallback handled inside analyze_pdf
-            if isinstance(result, dict):
-                summary = result.get("summary", "")
-            else:
-                summary = str(result)
 
-            # Check for first analysis failure
-            if "INSUFFICIENT DATA" in summary or "unexpected" in summary.lower():
-                send_meta_whatsapp_message(user_phone, "Uchambuzi wa kwanza umefaulu, tafadhali subiri uchambuzi wa pili.")
-                analysis_summary = "Tafadhali subiri uchambuzi wa pili."
+            if result.get("first_analysis_failed"):
+                # Friendly user notification
+                send_meta_whatsapp_message(
+                    user_phone,
+                    "📄 We received your file. First analysis failed, please wait for the second analysis."
+                )
             else:
+                summary = result.get("summary", "")
                 analysis_summary = f"📄 *PDF Analysis Complete*\n\n{summary}"
 
-        # Image Analysis
+        # --- Image Analysis ---
         elif mime_type in ALLOWED_IMAGE_TYPES:
             logger.info("Starting image analysis...")
             result = analyze_image(file_data, mime_type)
             summary = result.get("summary") if isinstance(result, dict) else str(result)
             analysis_summary = f"🖼️ *Image Analysis Complete*\n\n{summary}"
 
-        # Unsupported MIME
+        # --- Unsupported MIME ---
         else:
             message = f"Unsupported file type ({mime_type}). Please send PDF or image (JPG/PNG/WEBP)."
             send_meta_whatsapp_message(user_phone, message)
             return {"status": "unsupported", "message": message}
 
-        # Store file in Supabase
+        # --- Store file in Supabase ---
         logger.info("Storing file in Supabase...")
         stored_result = store_file(
             user_id=user_id,
@@ -97,7 +92,7 @@ def process_file_upload(
         stored_url = stored_result['file_url']
         logger.info(f"File stored successfully at {stored_url}")
 
-        # Send final analysis message if exists
+        # --- Send final analysis message (if available) ---
         if analysis_summary:
             send_meta_whatsapp_message(user_phone, analysis_summary)
 
@@ -111,5 +106,8 @@ def process_file_upload(
 
     except Exception as e:
         logger.exception(f"Error processing file: {e}")
-        send_meta_whatsapp_message(user_phone, f"❌ Tatizo lilitokea wakati wa uchambuzi wa faili yako: {str(e)}")
+        send_meta_whatsapp_message(
+            user_phone,
+            f"❌ Error processing your file: {str(e)}"
+        )
         return {"status": "error", "message": str(e)}
