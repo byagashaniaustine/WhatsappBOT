@@ -23,7 +23,7 @@ def process_file_upload(
     flow_type: str,
     media_url: str,
     mime_type: str,
-    file_name: str = None  # ✅ Optional parameter
+    file_name: str = None
 ):
     try:
         logger.info(f"Processing file upload: MIME={mime_type}, URL={media_url}")
@@ -44,14 +44,27 @@ def process_file_upload(
         if not file_name:
             file_name = f"{user_id}_{uuid.uuid4()}{ext}"
 
+        # Inform user that file is received
+        send_meta_whatsapp_message(user_phone, "Faili yako imepokelewa, tafadhali subiri uchambuzi.")
+
         analysis_summary = None
 
         # PDF Analysis
         if mime_type == ALLOWED_PDF_TYPE:
             logger.info("Starting PDF analysis...")
             result = analyze_pdf(file_data, file_name, user_name)
-            summary = result.get("summary") if isinstance(result, dict) else str(result)
-            analysis_summary = f"📄 *PDF Analysis Complete*\n\n{summary}"
+            # If Manka fails, fallback handled inside analyze_pdf
+            if isinstance(result, dict):
+                summary = result.get("summary", "")
+            else:
+                summary = str(result)
+
+            # Check for first analysis failure
+            if "INSUFFICIENT DATA" in summary or "unexpected" in summary.lower():
+                send_meta_whatsapp_message(user_phone, "Uchambuzi wa kwanza umefaulu, tafadhali subiri uchambuzi wa pili.")
+                analysis_summary = "Tafadhali subiri uchambuzi wa pili."
+            else:
+                analysis_summary = f"📄 *PDF Analysis Complete*\n\n{summary}"
 
         # Image Analysis
         elif mime_type in ALLOWED_IMAGE_TYPES:
@@ -84,11 +97,11 @@ def process_file_upload(
         stored_url = stored_result['file_url']
         logger.info(f"File stored successfully at {stored_url}")
 
-        # Send final analysis message
-        final_message = analysis_summary if analysis_summary else "File uploaded successfully."
-        send_meta_whatsapp_message(user_phone, final_message)
+        # Send final analysis message if exists
+        if analysis_summary:
+            send_meta_whatsapp_message(user_phone, analysis_summary)
 
-        return {"status": "success", "summary": final_message, "file_url": stored_url}
+        return {"status": "success", "summary": analysis_summary, "file_url": stored_url}
 
     except requests.exceptions.HTTPError as he:
         error_msg = f"HTTP error downloading file (status {he.response.status_code})"
@@ -98,5 +111,5 @@ def process_file_upload(
 
     except Exception as e:
         logger.exception(f"Error processing file: {e}")
-        send_meta_whatsapp_message(user_phone, f"❌ Error processing your file: {str(e)}")
+        send_meta_whatsapp_message(user_phone, f"❌ Tatizo lilitokea wakati wa uchambuzi wa faili yako: {str(e)}")
         return {"status": "error", "message": str(e)}

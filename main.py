@@ -395,7 +395,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     try:
                         # 1. Get the direct download URL from Meta
                         media_url = get_media_url(media_id)
-                        
+                        send_meta_whatsapp_message(from_number,
+                        "✅ Tumepokea faili lako. Tafadhali subiri uchambuzi wa kwanza...")
+    
                         
                         background_tasks.add_task(
                                 process_file_upload,
