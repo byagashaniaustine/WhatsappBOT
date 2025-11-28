@@ -72,7 +72,7 @@ def calculate_loan_results(user_data: dict):
     logger.critical(f"Flow routing answer: {response_screen} ➡️ Calculation Complete. Ready to route to LOAN_RESULT.")
     return response_screen
 async def whatsapp_menu(
-    data: dict,
+    data: dict = None,
     principal: float = None,
     duration: int = None,
     rate: float = None
