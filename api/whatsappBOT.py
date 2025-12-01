@@ -162,7 +162,7 @@ async def whatsapp_menu(
         user_text_normalized = user_text.strip().upper()
         
         # Check if it's an initiation keyword
-        initiation_keywords = ["MENU", "MAMBO", "HI", "HELLO", "ANZA", "MWANZO", "HOLA", "HEY"]
+        initiation_keywords = ["MENU", "MAMBO", "HI", "HELLO", "ANZA", "MWANZO", "HOLA","START", "HEY"]
         
         if user_text_normalized in initiation_keywords:
             logger.critical(f"🎯 Initiation keyword detected: {user_text_normalized}")
