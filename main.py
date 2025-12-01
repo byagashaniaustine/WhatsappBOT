@@ -31,7 +31,7 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
-@app.get("/whatsapp-webhook")
+@app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     params = request.query_params
 
