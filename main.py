@@ -31,6 +31,26 @@ app = FastAPI()
 
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
 
+@app.get("/whatsapp-webhook/")
+async def verify_webhook(request: Request):
+    params = request.query_params
+
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+        return PlainTextResponse(challenge, status_code=200)
+
+    return PlainTextResponse("Verification failed", status_code=403)
+
+
+@app.post("/whatsapp-webhook")
+async def whatsapp_webhook(request: Request):
+    data = await request.json()
+    print("Incoming WhatsApp Message:", data)
+    return {"status": "received"}
+
 # --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
 FLOW_DEFINITIONS = {
     "LOAN_FLOW_ID_1": { 
