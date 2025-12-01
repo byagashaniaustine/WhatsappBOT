@@ -68,7 +68,7 @@ FLOW_DEFINITIONS = {
             "data": {
                 "extension_message_response": {
                     "params": {
-                        "flow_token": "REPLACE_FLOW_TOKEN", 
+                        "flow_token": "flows-builder-71e58c49", 
                         "loan_summary": "Your loan has been processed."
                     }
                 }
