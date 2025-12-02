@@ -95,7 +95,7 @@ FLOW_DEFINITIONS = {
     "ERROR": {"screen": "ERROR", "data": {"error_message": "An unknown action occurred."}}
 }
 
-# --- KEY LOADING AND UTILITIES (UPDATED WITH SAFE LOGGING) ---
+# --- KEY LOADING AND UTILITIES (UNCHANGED) ---
 def load_private_key(key_string: str) -> RSA.RsaKey:
     """Handles various newline escaping issues when loading key from ENV."""
     # Log the key size to confirm it was loaded, without printing the key content
@@ -195,7 +195,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 # Decryption logic 
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
                 
-                # New safe log to show the data size being decrypted
+                # Log the data size being decrypted
                 logger.critical(f"🔑 Decrypting AES key size: {len(encrypted_aes_key_bytes)} bytes.")
                 
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
@@ -207,7 +207,6 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
-                # Reverted this log back to CRITICAL since it's highly helpful and contains no secrets
                 logger.critical(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
                 # --- FLOW ROUTING LOGIC ---
@@ -405,21 +404,22 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                  logger.error("❌ Could not determine 'from_number' for regular message.")
                  return PlainTextResponse("OK (No Sender)", status_code=200)
 
-            # Handle TEXT messages (FIXED: Added media_url/mime_type=None to prevent TypeError)
+            # Handle TEXT messages (FIXED: Route back to whatsapp_menu with user_text)
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "")
                 logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
-                # Queue background task for text message handling, passing None for file attributes
+                
+                # --- START OF FIX: Reroute to whatsapp_menu ---
                 background_tasks.add_task(
-                    process_file_upload,
-                    user_id=from_number,
-                    user_name=user_name,
-                    user_phone=from_number,
-                    flow_type="REGULAR_TEXT", 
-                    media_url=None,           
-                    mime_type=None,           
-                    file_name=None            
+                    whatsapp_menu,
+                    from_number, # The recipient number
+                    user_text,   # The message body (e.g., "hi", "1", "menu")
+                    None,        # Assuming the next parameter is principal/rate 
+                    None,        # and these are not relevant for initial text chat 
+                    None         # If whatsapp_menu needs more args, adjust here
                 )
+                logger.critical(f"✅ Text message '{user_text}' routed to whatsapp_menu for {from_number}.")
+                # --- END OF FIX ---
             
             # Handle MEDIA messages (image, document, video, audio) (UNCHANGED)
             elif message_type in ["image", "document", "video", "audio"]:
