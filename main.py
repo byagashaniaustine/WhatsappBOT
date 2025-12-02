@@ -395,10 +395,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     user_name=user_name,
     user_phone=from_number,
     flow_type="REGULAR_MEDIA",  # or whichever flow type is appropriate
-    media_url=media_url,
-    mime_type=mime_type,
-    file_name=file_name
-)
+    )
 
 
             
