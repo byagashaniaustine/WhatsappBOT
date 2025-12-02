@@ -130,7 +130,7 @@ async def whatsapp_menu(
             logger.critical(f"✅ Menu template sent to {from_number}, token embedded.")
             
         except Exception as e:
-            logger.error(f"❌ Error processing initiation: {e}", exc_info=True)
+            logger.error(f"❌ Error processing initiation: {e}")
             await send_meta_whatsapp_message(
                 from_number,
                 "Samahani, tatizo limetokea. Tafadhali jaribu tena."

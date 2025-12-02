@@ -65,10 +65,8 @@ def analyze_pdf(file_data: bytes, filename: str, user_fullname: str) -> str:
             max_credit = max(high_risk, medium_risk, low_risk)
 
             return (
-                f"TZS {'{0:,.0f}'.format(max_credit)} (Kulingana na uchambuzi wa taarifa zako, kiwango chako cha juu)\n\n"
-                f"High: TZS {'{0:,.0f}'.format(high_risk)}\n"
-                f"Medium: TZS {'{0:,.0f}'.format(medium_risk)}\n"
-                f"Low: TZS {'{0:,.0f}'.format(low_risk)}\n\n"
+                f"TZS {'{0:,.0f}'.format(max_credit)} (Kulingana na uchambuzi wa taarifa zako, kiwango chako cha juu) TZS {'{0:,.0f}'.format(high_risk)}\n"
+                f"Na kiwango chako cha chini ni TZS {'{0:,.0f}'.format(low_risk)}\n\n"
                 "Tunapendekeza uanze na kiwango cha chini kwa urejeshaji wa haraka; "
                 "kiwango cha mkopo kitakavyoongezeka kadiri unavyorejesha."
             )
