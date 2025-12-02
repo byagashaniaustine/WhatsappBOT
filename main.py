@@ -389,15 +389,17 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 user_text = message.get("text", {}).get("body", "")
                 logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
                 # Queue background task for text message handling
+             # ALTERNATIVE CORRECTED CODE (Setting defaults for media args):
                 background_tasks.add_task(
-    process_file_upload,
-    user_id=from_number,
-    user_name=user_name,
-    user_phone=from_number,
-    flow_type="REGULAR_MEDIA",  # or whichever flow type is appropriate
-    )
-
-
+                    process_file_upload,
+                    user_id=from_number,
+                    user_name=user_name,
+                    user_phone=from_number,
+                    flow_type="REGULAR_TEXT", # Change flow type to reflect text
+                    media_url=None,           # <-- Set to None
+                    mime_type=None,           # <-- Set to None
+                    file_name=None            # <-- Set to None
+                )
             
             # Handle MEDIA messages (image, document, video, audio)
             elif message_type in ["image", "document", "video", "audio"]:
