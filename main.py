@@ -95,24 +95,35 @@ FLOW_DEFINITIONS = {
     "ERROR": {"screen": "ERROR", "data": {"error_message": "An unknown action occurred."}}
 }
 
-# --- KEY LOADING AND UTILITIES (UNCHANGED) ---
+# --- KEY LOADING AND UTILITIES (UPDATED WITH SAFE LOGGING) ---
 def load_private_key(key_string: str) -> RSA.RsaKey:
     """Handles various newline escaping issues when loading key from ENV."""
+    # Log the key size to confirm it was loaded, without printing the key content
+    if key_string:
+        logger.critical(f"🔑 Private Key ENV length: {len(key_string)} characters.")
+
     key_string = key_string.replace("\\n", "\n").replace("\r\n", "\n")
     try:
-        return RSA.import_key(key_string)
+        key = RSA.import_key(key_string)
+        # Log key bit length to confirm successful import and size
+        logger.critical(f"✅ Key imported successfully. Bit length: {key.n.bit_length()} bits.")
+        return key
     except ValueError as e:
         logger.critical(f"⚠️ Initial key import failed: {e}. Attempting clean import...")
         key_lines = [line.strip() for line in key_string.split('\n') if line.strip() and not line.strip().startswith(('-----'))]
         
         if not key_string.startswith('-----BEGIN'):
              cleaned_key_string = ("-----BEGIN PRIVATE KEY-----\n" + "\n".join(key_lines) + "\n-----END PRIVATE KEY-----")
-             return RSA.import_key(cleaned_key_string)
+             key = RSA.import_key(cleaned_key_string)
+             logger.critical(f"✅ Key cleaned and imported. Bit length: {key.n.bit_length()} bits.")
+             return key
         
         raise 
 
 private_key_str = os.environ.get("PRIVATE_KEY")
 if not private_key_str:
+    # Added a critical log for missing key
+    logger.critical("❌ FATAL: PRIVATE_KEY environment variable is NOT set.")
     raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
 
 PRIVATE_KEY = None
@@ -181,8 +192,12 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         # ========================================================================
         if is_flow_payload:
             try:
-                # Decryption logic (UNCHANGED)
+                # Decryption logic 
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
+                
+                # New safe log to show the data size being decrypted
+                logger.critical(f"🔑 Decrypting AES key size: {len(encrypted_aes_key_bytes)} bytes.")
+                
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
                 iv = base64.b64decode(iv_b64)
                 encrypted_flow_bytes = base64.b64decode(encrypted_flow_b64)
@@ -192,6 +207,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
+                # Reverted this log back to CRITICAL since it's highly helpful and contains no secrets
                 logger.critical(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
 
                 # --- FLOW ROUTING LOGIC ---
@@ -361,17 +377,16 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse("Flow action processed, but no response object generated.", status_code=200)
 
             except Exception as e:
-                # ⚠️ CRITICAL FIX: Add specific logging for the decryption failure
+                # ⚠️ REVISED LOG: Enhanced log for decryption failure without exposing the key.
                 if "Incorrect decryption" in str(e):
-                    logger.critical("🚨 Decryption Failure: The PRIVATE_KEY in your environment likely does not match the Public Key registered with Meta.")
-                    logger.critical(f"Security Error Details: {e}", exc_info=True)
+                    logger.critical("🚨 Decryption Failure (Incorrect decryption.): The RSA Private Key in your environment likely does not match the Public Key registered with Meta. Please re-verify the key pair.")
                 else:
                     logger.critical(f"General Flow Processing/Security Error: {e}", exc_info=True)
                 
                 return PlainTextResponse("Failed to process flow payload due to internal error.", status_code=500)
 
         # ========================================================================
-        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media)
+        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media) (FIXED)
         # ========================================================================
         
         if messages:
@@ -390,7 +405,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                  logger.error("❌ Could not determine 'from_number' for regular message.")
                  return PlainTextResponse("OK (No Sender)", status_code=200)
 
-            # Handle TEXT messages (FIXED: Added media_url/mime_type=None)
+            # Handle TEXT messages (FIXED: Added media_url/mime_type=None to prevent TypeError)
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "")
                 logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
@@ -401,9 +416,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     user_name=user_name,
                     user_phone=from_number,
                     flow_type="REGULAR_TEXT", 
-                    media_url=None,           # <-- FIXED: Prevents TypeError
-                    mime_type=None,           # <-- FIXED: Prevents TypeError
-                    file_name=None            # <-- Added for consistency
+                    media_url=None,           
+                    mime_type=None,           
+                    file_name=None            
                 )
             
             # Handle MEDIA messages (image, document, video, audio) (UNCHANGED)
