@@ -196,7 +196,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 encrypted_aes_key_bytes = base64.b64decode(encrypted_aes_key_b64)
                 
                 # Log the data size being decrypted
-                logger.critical(f"🔑 Decrypting AES key size: {len(encrypted_aes_key_bytes)} bytes.")
+                logger.critical(f"🔑 Decrypting AES key size: {encrypted_aes_key_bytes} bytes.")
                 
                 aes_key = RSA_CIPHER.decrypt(encrypted_aes_key_bytes)
                 iv = base64.b64decode(iv_b64)
@@ -207,7 +207,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 decrypted_bytes = cipher_aes.decrypt_and_verify(ciphertext, tag)
                 decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
-                logger.critical(f"📥 Decrypted Flow Data: {json.dumps(decrypted_data, indent=2)}")
+                logger.critical(f"📥 Decrypted Flow Data: {decrypted_data}")
 
                 # --- FLOW ROUTING LOGIC ---
                 action = decrypted_data.get("action")
