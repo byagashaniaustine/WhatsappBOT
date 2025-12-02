@@ -75,7 +75,7 @@ def calculate_loan_results(user_data: dict):
     return response_screen
 
 async def whatsapp_menu(
-    payload: dict # Accepts the full dict/json payload
+    payload: str # Accepts the full dict/json payload
 ):
     """
     Unified WhatsApp message handler. Now primarily focuses on Flow initiation from text.
