@@ -68,7 +68,7 @@ FLOW_DEFINITIONS = {
             "data": {
                 "extension_message_response": {
                     "params": {
-                        "flow_token": "flows-builder-71e58c49", 
+                        "flow_token": "RETURNED_FLOW_TOKEN", 
                         "loan_summary": "Your loan has been processed."
                     }
                 }
@@ -361,11 +361,17 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 return PlainTextResponse("Flow action processed, but no response object generated.", status_code=200)
 
             except Exception as e:
-                logger.critical(f"General Flow Processing/Security Error: {e}", exc_info=True)
+                # ⚠️ CRITICAL FIX: Add specific logging for the decryption failure
+                if "Incorrect decryption" in str(e):
+                    logger.critical("🚨 Decryption Failure: The PRIVATE_KEY in your environment likely does not match the Public Key registered with Meta.")
+                    logger.critical(f"Security Error Details: {e}", exc_info=True)
+                else:
+                    logger.critical(f"General Flow Processing/Security Error: {e}", exc_info=True)
+                
                 return PlainTextResponse("Failed to process flow payload due to internal error.", status_code=500)
 
         # ========================================================================
-        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media) (UNCHANGED)
+        # REGULAR WHATSAPP MESSAGE HANDLING (Text and Media)
         # ========================================================================
         
         if messages:
@@ -384,24 +390,23 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                  logger.error("❌ Could not determine 'from_number' for regular message.")
                  return PlainTextResponse("OK (No Sender)", status_code=200)
 
-            # Handle TEXT messages
+            # Handle TEXT messages (FIXED: Added media_url/mime_type=None)
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "")
                 logger.critical(f"💬 Message from {from_number} ({user_name}): {user_text}")
-                # Queue background task for text message handling
-             # ALTERNATIVE CORRECTED CODE (Setting defaults for media args):
+                # Queue background task for text message handling, passing None for file attributes
                 background_tasks.add_task(
                     process_file_upload,
                     user_id=from_number,
                     user_name=user_name,
                     user_phone=from_number,
-                    flow_type="REGULAR_TEXT", # Change flow type to reflect text
-                    media_url=None,           # <-- Set to None
-                    mime_type=None,           # <-- Set to None
-                    file_name=None            # <-- Set to None
+                    flow_type="REGULAR_TEXT", 
+                    media_url=None,           # <-- FIXED: Prevents TypeError
+                    mime_type=None,           # <-- FIXED: Prevents TypeError
+                    file_name=None            # <-- Added for consistency
                 )
             
-            # Handle MEDIA messages (image, document, video, audio)
+            # Handle MEDIA messages (image, document, video, audio) (UNCHANGED)
             elif message_type in ["image", "document", "video", "audio"]:
                 # Get the media object from the message payload
                 media_object = message.get(message_type, {})
@@ -435,7 +440,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                         send_meta_whatsapp_message(from_number, "Samahani, kuna hitilafu imetokea wakati tukipakia faili lako.")
 
             
-            # Handle INTERACTIVE messages (Flow closure notifications, Quick Replies)
+            # Handle INTERACTIVE messages (Flow closure notifications, Quick Replies) (UNCHANGED)
             elif message_type == "interactive":
                 logger.critical(f"💬 Received Interactive message from {from_number}")
                 # If this is a Quick Reply from the loan result, you'd handle the button ID here.
