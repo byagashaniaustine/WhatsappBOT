@@ -195,7 +195,7 @@ async def send_quick_reply_message(to: str, body: str, buttons: List[Dict[str, A
 # ==============================================================
 # GET MEDIA DOWNLOAD URL (UNCHANGED)
 # ==============================================================
-async def get_media_url(media_id: str) -> str:
+def get_media_url(media_id: str) -> str:
     """
     Get the download URL for a media file from WhatsApp.
     """
