@@ -31,7 +31,7 @@ async def process_file_upload(
         if not META_ACCESS_TOKEN:
             error_msg = "Meta Access Token not set. Cannot download media."
             logger.error(error_msg)
-            send_meta_whatsapp_message(user_phone, f"❌ {error_msg}")
+            await   send_meta_whatsapp_message(user_phone, f"❌ {error_msg}")
             return {"status": "error", "message": error_msg}
 
         # Download file from Meta
@@ -45,7 +45,7 @@ async def process_file_upload(
             file_name = f"{user_id}_{uuid.uuid4()}{ext}"
 
         # Inform user that file is received
-        send_meta_whatsapp_message(user_phone, "Faili yako imepokelewa, tafadhali subiri uchambuzi.")
+        await send_meta_whatsapp_message(user_phone, "Faili yako imepokelewa, tafadhali subiri uchambuzi.")
 
         analysis_summary = None
 
@@ -61,7 +61,7 @@ async def process_file_upload(
 
             # Check for first analysis failure
             if "INSUFFICIENT DATA" in summary or "unexpected" in summary.lower():
-                send_meta_whatsapp_message(user_phone, "Uchambuzi wa kwanza umefeli, tafadhali subiri uchambuzi wa pili.")
+                await send_meta_whatsapp_message(user_phone, "Uchambuzi wa kwanza umefeli, tafadhali subiri uchambuzi wa pili.")
                 analysis_summary = "Tafadhali subiri uchambuzi wa pili."
             else:
                 analysis_summary = f"📄 *PDF Analysis Complete*\n\n{summary}"
@@ -76,7 +76,7 @@ async def process_file_upload(
         # Unsupported MIME
         else:
             message = f"Unsupported file type ({mime_type}). Please send PDF or image (JPG/PNG/WEBP)."
-            send_meta_whatsapp_message(user_phone, message)
+            await send_meta_whatsapp_message(user_phone, message)
             return {"status": "unsupported", "message": message}
 
         # Store file in Supabase
@@ -99,17 +99,17 @@ async def process_file_upload(
 
         # Send final analysis message if exists
         if analysis_summary:
-            send_meta_whatsapp_message(user_phone, analysis_summary)
+            await send_meta_whatsapp_message(user_phone, analysis_summary)
 
         return {"status": "success", "summary": analysis_summary, "file_url": stored_url}
 
     except requests.exceptions.HTTPError as he:
         error_msg = f"HTTP error downloading file (status {he.response.status_code})"
         logger.exception(error_msg)
-        send_meta_whatsapp_message(user_phone, "Kumekuwa na shida kupakua faili yako. Tafadhali jaribu tena.")
+        await send_meta_whatsapp_message(user_phone, "Kumekuwa na shida kupakua faili yako. Tafadhali jaribu tena.")
         return {"status": "error", "message": error_msg}
 
     except Exception as e:
         logger.exception(f"Error processing file: {e}")
-        send_meta_whatsapp_message(user_phone, f" Tatizo lilitokea wakati wa uchambuzi wa faili yako:")
+        await send_meta_whatsapp_message(user_phone, f" Tatizo lilitokea wakati wa uchambuzi wa faili yako:")
         return {"status": "error", "message": str(e)}

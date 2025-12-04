@@ -351,7 +351,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                     logger.critical(f"📎 Media message detected: {message_type}, ID: {media_id}")
                     try:
                         media_url = get_media_url(media_id)
-                        send_meta_whatsapp_message(from_number, "✅ Tumepokea faili lako. Tafadhali subiri uchambuzi wa kwanza...")
+                        await send_meta_whatsapp_message(from_number, "✅ Tumepokea faili lako. Tafadhali subiri uchambuzi wa kwanza...")
                         
                         background_tasks.add_task(
                                 process_file_upload,
@@ -367,7 +367,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
 
                     except Exception as e:
                         logger.error(f"❌ Error handling media ID {media_id}: {e}", exc_info=True)
-                        send_meta_whatsapp_message(from_number, "Samahani, kuna hitilafu imetokea wakati tukipakia faili lako.")
+                        await send_meta_whatsapp_message(from_number, "Samahani, kuna hitilafu imetokea wakati tukipakia faili lako.")
 
             
             # Handle INTERACTIVE messages (unchanged)
