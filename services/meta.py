@@ -27,7 +27,7 @@ logger.info(f"*** DEBUG: Using PHONE_NUMBER_ID: {PHONE_NUMBER_ID} for API_URL: {
 # ==============================================================
 # SEND SIMPLE WHATSAPP TEXT MESSAGE (UNCHANGED)
 # ==============================================================
-def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
+async def send_meta_whatsapp_message(to: str, body: str) -> Dict[str, Any]:
     """
     Send a simple text message via WhatsApp.
     """
@@ -113,7 +113,7 @@ def send_meta_whatsapp_template(
 # ==============================================================
 # SEND MANKA MENU TEMPLATE (IMPROVED FOR FLOW TOKEN) (UNCHANGED)
 # ==============================================================
-def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[str, Any]:
+async def send_manka_menu_template(to: str, flow_token: Optional[str] = None) -> Dict[str, Any]:
     """
     Send the manka_menu template with flow button, embedding a unique flow_token (UUID).
     """
@@ -195,7 +195,7 @@ async def send_quick_reply_message(to: str, body: str, buttons: List[Dict[str, A
 # ==============================================================
 # GET MEDIA DOWNLOAD URL (UNCHANGED)
 # ==============================================================
-def get_media_url(media_id: str) -> str:
+async def get_media_url(media_id: str) -> str:
     """
     Get the download URL for a media file from WhatsApp.
     """
