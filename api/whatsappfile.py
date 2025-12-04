@@ -16,7 +16,7 @@ ALLOWED_PDF_TYPE = "application/pdf"
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
 
 
-def process_file_upload(
+async def process_file_upload(
     user_id: str,
     user_name: str,
     user_phone: str,
