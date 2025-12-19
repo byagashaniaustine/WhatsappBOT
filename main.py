@@ -6,7 +6,8 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from starlette.responses import JSONResponse 
 from typing import Optional 
-
+from dotenv import load_dotenv
+load_dotenv()   
 # Import cryptography libraries
 try:
     from Crypto.PublicKey import RSA
@@ -31,7 +32,7 @@ logger.setLevel(logging.DEBUG)
 
 app = FastAPI()
 
-WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN")
+WEBHOOK_VERIFY_TOKEN = os.getenv("WEBHOOK_VERIFY_TOKEN")
 
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
@@ -114,7 +115,7 @@ def load_private_key(key_string: str) -> RSA.RsaKey:
         
         raise 
 
-private_key_str = os.environ.get("PRIVATE_KEY")
+private_key_str = os.getenv("PRIVATE_KEY")
 if not private_key_str:
     logger.critical("❌ FATAL: PRIVATE_KEY environment variable is NOT set.")
     raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")

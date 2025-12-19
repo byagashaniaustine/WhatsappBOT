@@ -2,12 +2,12 @@ import os
 import requests
 import logging
 from services.gemini import analyze_file_with_gemini  # fallback
-
+from env import load_dotenv
+load_dotenv()
 logger = logging.getLogger(__name__)
 
-MANKA_API_KEY = os.environ.get("MANKA_API_KEY")
-MANKA_ENDPOINT = os.environ.get("MANKA_ENDPOINT")
-
+MANKA_API_KEY = os.getenv("MANKA_API_KEY")
+MANKA_ENDPOINT = os.getenv("MANKA_ENDPOINT")
 if not MANKA_API_KEY or not MANKA_ENDPOINT:
     logger.warning(
         "MANKA_API_KEY or MANKA_ENDPOINT not set. Only Gemini fallback will be functional."

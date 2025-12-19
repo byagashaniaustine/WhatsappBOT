@@ -3,6 +3,9 @@ import uuid
 import logging
 import requests
 from typing import Dict, Any, Optional, List
+from env import load_dotenv 
+
+load_dotenv()
 
 # -----------------------------------
 # LOGGER SETUP
@@ -13,8 +16,8 @@ logger.setLevel(logging.INFO)
 # -----------------------------------
 # ENVIRONMENT VARIABLES
 # -----------------------------------
-ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
-PHONE_NUMBER_ID = os.environ.get("WA_PHONE_NUMBER_ID")
+ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
+PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID")
 
 # WhatsApp Cloud API version (Using the latest version in your code)
 API_VERSION = "v21.0" 

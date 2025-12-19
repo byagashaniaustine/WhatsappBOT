@@ -7,13 +7,15 @@ from services.supabase import store_file
 from services.gemini import analyze_image
 from services.pdfendpoint import analyze_pdf
 from services.meta import send_meta_whatsapp_message
+from env import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
 ALLOWED_PDF_TYPE = "application/pdf"
 
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")
 
 
 async def process_file_upload(

@@ -3,12 +3,14 @@ import logging
 from google import genai
 from google.genai.errors import APIError
 from google.genai.types import Part
+from env import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 # --- Gemini Client Initialization ---
 try:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError("GEMINI_API_KEY environment variable not found.")
     client = genai.Client(api_key=api_key)
