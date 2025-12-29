@@ -7,7 +7,7 @@ from services.supabase import store_file
 from services.gemini import analyze_image
 from services.pdfendpoint import analyze_pdf
 from services.meta import send_meta_whatsapp_message
-from env import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)

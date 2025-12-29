@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 from services.gemini import analyze_file_with_gemini  # fallback
-from env import load_dotenv
+from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 

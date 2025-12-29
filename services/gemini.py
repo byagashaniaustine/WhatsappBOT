@@ -3,7 +3,7 @@ import logging
 from google import genai
 from google.genai.errors import APIError
 from google.genai.types import Part
-from env import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)

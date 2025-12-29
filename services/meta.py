@@ -3,7 +3,7 @@ import uuid
 import logging
 import requests
 from typing import Dict, Any, Optional, List
-from env import load_dotenv 
+from dotenv import load_dotenv 
 
 load_dotenv()
 

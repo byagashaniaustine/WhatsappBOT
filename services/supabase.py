@@ -3,7 +3,7 @@ import uuid
 import logging
 from supabase import create_client, Client
 from typing import Optional
-from env import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 
