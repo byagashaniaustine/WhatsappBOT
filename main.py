@@ -2,135 +2,108 @@ import os
 import json
 import base64
 import logging
+import httpx
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
-from starlette.responses import JSONResponse 
-from typing import Optional 
+from starlette.responses import JSONResponse
+from typing import Optional
 from dotenv import load_dotenv
-load_dotenv()   
+
+load_dotenv()
+
 # Import cryptography libraries
 try:
     from Crypto.PublicKey import RSA
-    from Crypto.Hash import SHA256 
+    from Crypto.Hash import SHA256
     from Crypto.Cipher import PKCS1_OAEP, AES
-    from Crypto.Util.Padding import unpad
 except ImportError:
-    # Ensure this dependency is available
     raise RuntimeError("PyCryptodome is not installed. Please install with: pip install pycryptodome")
 
 # Import WhatsApp handling functions
-# NOTE: whatsapp_menu must be updated to accept a dict/json payload.
-# NOTE: The Quick Reply sending logic for loan results has been REMOVED from the webhook.
-from api.whatsappBOT import whatsapp_menu, calculate_loan_results 
+from api.whatsappBOT import whatsapp_menu, calculate_loan_results
 from api.whatsappfile import process_file_upload
-from services.meta import send_meta_whatsapp_message, get_media_url, send_manka_menu_template 
-
+from services.meta import send_meta_whatsapp_message, get_media_url, send_manka_menu_template
 
 # Setup logging
 logger = logging.getLogger("whatsapp_app")
-logger.setLevel(logging.DEBUG) 
+logger.setLevel(logging.DEBUG)
 
 app = FastAPI()
+
+# --------------------------------------------------
+# CTA URL MESSAGE
+# --------------------------------------------------
+async def send_cta_url_message(to_phone: str, body_text: str, button_label: str, target_url: str):
+    access_token = os.getenv("WHATSAPP_ACCESS_TOKEN")
+    phone_id = os.getenv("PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v21.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_phone,
+        "type": "interactive",
+        "interactive": {
+            "type": "cta_url",
+            "header": {"type": "text", "text": "Ripoti ya Mkopo"},
+            "body": {"text": body_text},
+            "footer": {"text": "Manka"},
+            "action": {
+                "name": "cta_url",
+                "parameters": {
+                    "display_text": button_label,
+                    "url": target_url
+                }
+            }
+        }
+    }
+
+    async with httpx.AsyncClient() as client:
+        await client.post(url, json=payload, headers=headers)
+
 
 WEBHOOK_VERIFY_TOKEN = os.getenv("WEBHOOK_VERIFY_TOKEN")
 
 @app.get("/whatsapp-webhook/")
 async def verify_webhook(request: Request):
     params = request.query_params
-
-    mode = params.get("hub.mode")
-    token = params.get("hub.verify_token")
-    challenge = params.get("hub.challenge")
-
-    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-        return PlainTextResponse(challenge, status_code=200)
-
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == WEBHOOK_VERIFY_TOKEN:
+        return PlainTextResponse(params.get("hub.challenge"))
     return PlainTextResponse("Verification failed", status_code=403)
 
-
-# --- FLOW SCREEN DEFINITIONS (UNCHANGED) ---
+# --------------------------------------------------
+# FLOW DEFINITIONS (UNCHANGED)
+# --------------------------------------------------
 FLOW_DEFINITIONS = {
-    "LOAN_FLOW_ID_1": { 
-        "MAIN_MENU": {"screen": "MAIN_MENU", "data": {}},
-        "LOAN_CALCULATOR": {"screen": "LOAN_CALCULATOR", "data": {}}, 
-        "LOAN_RESULT": {"screen": "LOAN_RESULT", "data": {}}, 
-        "CREDIT_SCORE": {"screen": "CREDIT_SCORE", "data": {}},
-        "LOAN_TYPES": {"screen": "LOAN_TYPES", "data": {}},
-        "SERVICES": {"screen": "SERVICES", "data": {}}, 
-        "AFFORDABILITY_CHECK": {"screen": "AFFORDABILITY_WELCOME", "data": {}},
-        "DOCUMENT_REQUEST": {"screen": "DOCUMENT_REQUEST", "data": {}},
+    "LOAN_FLOW_ID_1": {
         "SUCCESS_ACTION": "SUBMIT_LOAN",
         "SUCCESS_RESPONSE": {
             "screen": "SUCCESS",
             "data": {
                 "extension_message_response": {
                     "params": {
-                        "flow_token": "RETURNED_FLOW_TOKEN", 
-                        "loan_summary": "Your loan has been processed."
+                        "flow_token": "RETURNED_FLOW_TOKEN",
+                        "loan_summary": "Loan processed"
                     }
                 }
             }
-        },
-    },
-    "ACCOUNT_FLOW_ID_2": {
-        "PROFILE": {"screen": "PROFILE_UPDATE", "data": {"name": "John Doe", "email": "john.doe@example.com"}},
-        "SUMMARY": {"screen": "SUMMARY_SCREEN", "data": {}},
-        "SUCCESS_ACTION": "SAVE_PROFILE",
-        "SUCCESS_RESPONSE": {
-            "screen": "ACCOUNT_SAVED",
-            "data": {
-                "extension_message_response": {
-                    "params": {
-                        "flow_token": "REPLACE_FLOW_TOKEN", 
-                        "update_message": "Account profile updated successfully!"
-                    }
-                }
-            },
         }
-    },
-    "HEALTH_CHECK_PING": {"screen": "HEALTH_CHECK_OK", "data": {"status": "active"}},
-    "ERROR": {"screen": "ERROR", "data": {"error_message": "An unknown action occurred."}}
+    }
 }
 
-# --- KEY LOADING AND UTILITIES (UNCHANGED) ---
+# --------------------------------------------------
+# RSA SETUP
+# --------------------------------------------------
 def load_private_key(key_string: str) -> RSA.RsaKey:
-    """Handles various newline escaping issues when loading key from ENV."""
-    if key_string:
-        logger.critical(f"🔑 Private Key ENV length: {len(key_string)} characters.")
+    key_string = key_string.replace("\\n", "\n")
+    return RSA.import_key(key_string)
 
-    key_string = key_string.replace("\\n", "\n").replace("\r\n", "\n")
-    try:
-        key = RSA.import_key(key_string)
-        logger.critical(f"✅ Key imported successfully. Bit length: {key.n.bit_length()} bits.")
-        return key
-    except ValueError as e:
-        logger.critical(f"⚠️ Initial key import failed: {e}. Attempting clean import...")
-        key_lines = [line.strip() for line in key_string.split('\n') if line.strip() and not line.strip().startswith(('-----'))]
-        
-        if not key_string.startswith('-----BEGIN'):
-             cleaned_key_string = ("-----BEGIN PRIVATE KEY-----\n" + "\n".join(key_lines) + "\n-----END PRIVATE KEY-----")
-             key = RSA.import_key(cleaned_key_string)
-             logger.critical(f"✅ Key cleaned and imported. Bit length: {key.n.bit_length()} bits.")
-             return key
-        
-        raise 
-
-private_key_str = os.getenv("PRIVATE_KEY")
-if not private_key_str:
-    logger.critical("❌ FATAL: PRIVATE_KEY environment variable is NOT set.")
-    raise RuntimeError("PRIVATE_KEY environment variable is not set or empty.")
-
-PRIVATE_KEY = None
-RSA_CIPHER = None
-try:
-    logger.critical("🔑 Attempting to load RSA private key from environment variable.")
-    PRIVATE_KEY = load_private_key(private_key_str)
-    RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
-    logger.critical("✅ RSA Cipher initialized with PKCS1_OAEP and SHA256 hashAlgo.")
-    
-except Exception as e:
-    logger.critical(f"FATAL: Failed to import RSA Private Key: {e}")
-    raise
+PRIVATE_KEY = load_private_key(os.getenv("PRIVATE_KEY"))
+RSA_CIPHER = PKCS1_OAEP.new(PRIVATE_KEY, hashAlgo=SHA256)
 
 # ----------------------------------------------------------------------
 ## 🚀 WEBHOOK HANDLER (POST) - All Flow Routing and Message Handling
