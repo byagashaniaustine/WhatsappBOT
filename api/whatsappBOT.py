@@ -144,5 +144,4 @@ async def whatsapp_menu(
             from_number,
             f"Samahani, sikuelewi '{user_text}'. Tuma 'MENU', 'MAMBO', 'HI', 'HELLO', 'ANZA', 'MWANZO', 'HOLA', 'START', 'HEY','NIAMBIE','SALAM' kupata huduma."
         )
-        # Also send menu template as fallback (using a generic token)
        
