@@ -104,7 +104,7 @@ async def whatsapp_menu(
     user_text_normalized = user_text.strip().upper()
     
     # Check if it's an initiation keyword
-    initiation_keywords = ["MENU", "MAMBO", "HI", "HELLO", "ANZA", "MWANZO", "HOLA", "START", "HEY"]
+    initiation_keywords = ["MENU", "MAMBO", "HI", "HELLO", "ANZA", "MWANZO", "HOLA", "START", "HEY","NIAMBIE","SALAM"]
     
     if user_text_normalized in initiation_keywords:
         logger.critical(f"🎯 Initiation keyword detected: {user_text_normalized}")
@@ -142,7 +142,7 @@ async def whatsapp_menu(
         
         await send_meta_whatsapp_message(
             from_number,
-            f"Samahani, sikuelewi '{user_text}'. Tuma 'menu' kupata huduma."
+            f"Samahani, sikuelewi '{user_text}'. Tuma 'MENU', 'MAMBO', 'HI', 'HELLO', 'ANZA', 'MWANZO', 'HOLA', 'START', 'HEY','NIAMBIE','SALAM' kupata huduma."
         )
         # Also send menu template as fallback (using a generic token)
-        await send_manka_menu_template(to=from_number, flow_token="fallback")
+       
